@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shareable Meal Planner</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .meal-card { transition: all 0.3s ease-in-out; }
+        .meal-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .form-input:focus, .form-select:focus { ring-offset-2 ring-2 ring-indigo-500 border-transparent; outline: none; }
+        @keyframes fadeInOut {
+            0%, 100% { opacity: 0; transform: translateY(10px); }
+            10%, 90% { opacity: 1; transform: translateY(0); }
+        }
+        .toast-notification { animation: fadeInOut 3s ease-in-out forwards; }
+        .modal-overlay { transition: opacity 0.3s ease; }
+        .modal-container { transition: all 0.3s ease; }
+        .loader { border-top-color: #4f46e5; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        /* Hide main content until a family is selected */
+        .content-hidden { display: none; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <!-- Loading / Family Selection Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-4">
+        <div id="loader-view">
+            <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-24 w-24 mb-4"></div>
+            <p class="text-xl text-gray-700">Connecting to your planner...</p>
+        </div>
+        <div id="family-modal-view" class="hidden w-full max-w-md">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl">
+                <h2 class="text-3xl font-bold text-center text-gray-800 mb-6">Join or Create a Family</h2>
+                
+                <!-- Create Family Section -->
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold mb-3 text-gray-700">Create a New Family</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-family-name" placeholder="Enter Family Name" class="form-input flex-grow px-4 py-2 border border-gray-300 rounded-lg shadow-sm">
+                        <button id="create-family-btn" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-indigo-700">Create</button>
+                    </div>
+                </div>
+
+                <!-- Join Family Section -->
+                <div>
+                    <h3 class="text-xl font-semibold mb-3 text-gray-700">Join an Existing Family</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="join-family-id" placeholder="Enter Family ID" class="form-input flex-grow px-4 py-2 border border-gray-300 rounded-lg shadow-sm">
+                        <button id="join-family-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg shadow-md hover:bg-green-700">Join</button>
+                    </div>
+                    <p id="join-error" class="text-red-500 text-sm mt-2 hidden">Family ID not found.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="main-content" class="container mx-auto px-4 py-8 md:py-12 content-hidden">
+        <!-- Header -->
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-900">Weekly Meal Planner</h1>
+            <p id="family-name-display" class="mt-2 text-2xl text-indigo-600 font-semibold"></p>
+        </header>
+        
+        <!-- Family Info & Management -->
+        <div class="max-w-4xl mx-auto mb-8 p-4 bg-indigo-100 text-indigo-800 rounded-lg text-center">
+            <p class="mb-2">Share this Family ID: <strong id="family-id-display" class="font-mono bg-white px-2 py-1 rounded cursor-pointer" title="Click to copy"></strong></p>
+            <button id="switch-family-btn" class="text-sm text-indigo-600 hover:underline">Switch or Leave Family</button>
+        </div>
+
+        <!-- Member Management -->
+        <div class="max-w-4xl mx-auto mb-10 p-6 bg-white rounded-xl shadow-lg border border-gray-200">
+            <h3 class="text-xl font-bold mb-4 text-gray-800">Family Members</h3>
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="new-member-name" placeholder="New member's name" class="form-input flex-grow px-3 py-2 border border-gray-300 rounded-md">
+                <button id="add-member-btn" class="bg-indigo-500 text-white font-semibold py-2 px-4 rounded-md hover:bg-indigo-600">Add</button>
+            </div>
+            <div id="members-list" class="flex flex-wrap gap-2"></div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="flex flex-wrap justify-center gap-4 mb-10">
+            <button id="save-plan" class="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700">Save Plan</button>
+            <button id="clear-plan" class="bg-red-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-red-600">Clear Plan</button>
+        </div>
+
+        <!-- Meal Plan Grid -->
+        <div id="meal-plan-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6"></div>
+    </div>
+    
+    <div id="save-toast" class="toast-notification fixed bottom-5 right-5 bg-green-500 text-white py-3 px-5 rounded-lg shadow-xl" style="display: none;"></div>
+    <div id="confirmation-modal" class="modal-overlay fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 hidden"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, deleteDoc, getDoc, collection, addDoc, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "MOCK_KEY", authDomain: "MOCK_DOMAIN", projectId: "MOCK_PROJECT_ID" };
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-meal-planner';
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const meals = ['Breakfast', 'Lunch', 'Dinner'];
+        let currentFamilyId = null;
+        let familyDocRef, planDocRef;
+        let unsubscribeFamily, unsubscribePlan;
+
+        // DOM Elements
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loaderView = document.getElementById('loader-view');
+        const familyModalView = document.getElementById('family-modal-view');
+        const mainContent = document.getElementById('main-content');
+        const grid = document.getElementById('meal-plan-grid');
+        
+        // --- Family Management ---
+        const createFamilyBtn = document.getElementById('create-family-btn');
+        const newFamilyNameInput = document.getElementById('new-family-name');
+        const joinFamilyBtn = document.getElementById('join-family-btn');
+        const joinFamilyIdInput = document.getElementById('join-family-id');
+        const joinError = document.getElementById('join-error');
+        const familyNameDisplay = document.getElementById('family-name-display');
+        const familyIdDisplay = document.getElementById('family-id-display');
+        const switchFamilyBtn = document.getElementById('switch-family-btn');
+        
+        // --- Member Management ---
+        const addMemberBtn = document.getElementById('add-member-btn');
+        const newMemberNameInput = document.getElementById('new-member-name');
+        const membersListDiv = document.getElementById('members-list');
+        
+        // --- Planner Controls ---
+        const saveButton = document.getElementById('save-plan');
+        const clearButton = document.getElementById('clear-plan');
+
+        // --- Core App Flow ---
+
+        const showFamilySelector = () => {
+            loaderView.classList.add('hidden');
+            familyModalView.classList.remove('hidden');
+            mainContent.classList.add('content-hidden');
+        };
+
+        const loadFamily = (familyId) => {
+            currentFamilyId = familyId;
+            localStorage.setItem(`mealPlannerFamilyId_${appId}`, familyId);
+            
+            familyDocRef = doc(db, 'artifacts', appId, 'public/data/families', familyId);
+            planDocRef = doc(familyDocRef, 'mealPlan', 'weeklyData');
+
+            listenForFamilyUpdates();
+            listenForPlanUpdates();
+            
+            loadingOverlay.classList.add('hidden');
+            mainContent.classList.remove('content-hidden');
+        };
+        
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                const savedFamilyId = localStorage.getItem(`mealPlannerFamilyId_${appId}`);
+                if (savedFamilyId) {
+                    loadFamily(savedFamilyId);
+                } else {
+                    showFamilySelector();
+                }
+            }
+        });
+
+        // --- UI Update Functions ---
+
+        const createPlannerUI = (members = []) => {
+            grid.innerHTML = '';
+            daysOfWeek.forEach(day => {
+                const dayCard = document.createElement('div');
+                dayCard.className = 'meal-card bg-white p-5 rounded-xl shadow-lg border border-gray-200';
+                let innerHTML = `<h2 class="text-2xl font-bold mb-4 text-center text-indigo-700">${day}</h2>`;
+                meals.forEach(meal => {
+                    const memberOptions = members.map(m => `<option value="${m}">${m}</option>`).join('');
+                    innerHTML += `
+                        <div class="mb-4">
+                            <label class="block text-md font-medium text-gray-700 mb-1">${meal}</label>
+                            <input type="text" id="${day.toLowerCase()}-${meal.toLowerCase()}-meal" placeholder="e.g., Salad" class="form-input w-full px-3 py-2 border border-gray-300 rounded-md">
+                            <select id="${day.toLowerCase()}-${meal.toLowerCase()}-chef" class="form-select w-full mt-2 px-3 py-2 border border-gray-300 rounded-md">
+                                <option value="">-- Unassigned --</option>
+                                ${memberOptions}
+                            </select>
+                        </div>`;
+                });
+                dayCard.innerHTML = innerHTML;
+                grid.appendChild(dayCard);
+            });
+        };
+
+        const updateUIWithPlanData = (planData) => {
+            daysOfWeek.forEach(day => {
+                meals.forEach(meal => {
+                    const dayKey = day.toLowerCase(), mealKey = meal.toLowerCase();
+                    const mealInput = document.getElementById(`${dayKey}-${mealKey}-meal`);
+                    const chefSelect = document.getElementById(`${dayKey}-${mealKey}-chef`);
+                    if (mealInput && chefSelect) {
+                        const data = planData?.[dayKey]?.[mealKey];
+                        mealInput.value = data?.meal || '';
+                        chefSelect.value = data?.chef || '';
+                    }
+                });
+            });
+        };
+
+        const updateFamilyUI = (familyData) => {
+            if (!familyData) return;
+            familyNameDisplay.textContent = familyData.name;
+            familyIdDisplay.textContent = currentFamilyId;
+            const members = familyData.members || [];
+            createPlannerUI(members); // Recreate UI with updated member list
+            
+            // Update members list display
+            membersListDiv.innerHTML = '';
+            members.forEach(member => {
+                const memberTag = document.createElement('div');
+                memberTag.className = 'bg-gray-200 text-gray-800 text-sm font-semibold px-3 py-1 rounded-full flex items-center gap-2';
+                memberTag.innerHTML = `<span>${member}</span><button data-member="${member}" class="remove-member-btn text-red-500 hover:text-red-700">&times;</button>`;
+                membersListDiv.appendChild(memberTag);
+            });
+        };
+
+        // --- Firestore Listeners ---
+        
+        const listenForFamilyUpdates = () => {
+            if (unsubscribeFamily) unsubscribeFamily();
+            unsubscribeFamily = onSnapshot(familyDocRef, (doc) => {
+                if (doc.exists()) {
+                    updateFamilyUI(doc.data());
+                }
+            });
+        };
+
+        const listenForPlanUpdates = () => {
+            if (unsubscribePlan) unsubscribePlan();
+            unsubscribePlan = onSnapshot(planDocRef, (doc) => {
+                updateUIWithPlanData(doc.exists() ? doc.data() : null);
+            });
+        };
+
+        // --- Event Handlers ---
+        
+        createFamilyBtn.addEventListener('click', async () => {
+            const name = newFamilyNameInput.value.trim();
+            if (!name) return;
+            try {
+                const newFamilyRef = await addDoc(collection(db, 'artifacts', appId, 'public/data/families'), {
+                    name: name,
+                    members: []
+                });
+                loadFamily(newFamilyRef.id);
+            } catch (e) { console.error("Error creating family:", e); }
+        });
+
+        joinFamilyBtn.addEventListener('click', async () => {
+            const familyId = joinFamilyIdInput.value.trim();
+            if (!familyId) return;
+            const familyToJoinRef = doc(db, 'artifacts', appId, 'public/data/families', familyId);
+            const docSnap = await getDoc(familyToJoinRef);
+            if (docSnap.exists()) {
+                joinError.classList.add('hidden');
+                loadFamily(familyId);
+            } else {
+                joinError.classList.remove('hidden');
+            }
+        });
+
+        switchFamilyBtn.addEventListener('click', () => {
+            localStorage.removeItem(`mealPlannerFamilyId_${appId}`);
+            currentFamilyId = null;
+            if(unsubscribeFamily) unsubscribeFamily();
+            if(unsubscribePlan) unsubscribePlan();
+            location.reload(); // Easiest way to reset state
+        });
+        
+        familyIdDisplay.addEventListener('click', () => {
+            navigator.clipboard.writeText(currentFamilyId).then(() => {
+                showToast('Family ID copied!');
+            });
+        });
+
+        addMemberBtn.addEventListener('click', async () => {
+            const name = newMemberNameInput.value.trim();
+            if (!name || !familyDocRef) return;
+            await updateDoc(familyDocRef, {
+                members: arrayUnion(name)
+            });
+            newMemberNameInput.value = '';
+        });
+
+        membersListDiv.addEventListener('click', async (e) => {
+            if (e.target.classList.contains('remove-member-btn')) {
+                const memberToRemove = e.target.dataset.member;
+                await updateDoc(familyDocRef, {
+                    members: arrayRemove(memberToRemove)
+                });
+            }
+        });
+
+        saveButton.addEventListener('click', async () => {
+            if (!planDocRef) return;
+            const planData = {};
+            daysOfWeek.forEach(day => {
+                const dayKey = day.toLowerCase();
+                planData[dayKey] = {};
+                meals.forEach(meal => {
+                    const mealKey = meal.toLowerCase();
+                    planData[dayKey][mealKey] = {
+                        meal: document.getElementById(`${dayKey}-${mealKey}-meal`).value,
+                        chef: document.getElementById(`${dayKey}-${mealKey}-chef`).value
+                    };
+                });
+            });
+            await setDoc(planDocRef, planData);
+            showToast('Plan saved!');
+        });
+        
+        clearButton.addEventListener('click', () => {
+            showConfirmationModal('Clear Plan?', 'This will clear the plan for everyone in this family.', async () => {
+                if (planDocRef) await deleteDoc(planDocRef);
+            });
+        });
+
+        // --- Helpers ---
+
+        const showToast = (message) => {
+            const toast = document.getElementById('save-toast');
+            toast.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        };
+
+        const showConfirmationModal = (title, message, confirmAction) => {
+            const modalHost = document.getElementById('confirmation-modal');
+            modalHost.innerHTML = `
+                <div class="modal-container bg-white w-full max-w-md p-6 rounded-lg shadow-xl text-center">
+                    <h3 class="text-xl font-bold mb-4">${title}</h3>
+                    <p class="text-gray-600 mb-6">${message}</p>
+                    <div class="flex justify-center space-x-4">
+                        <button class="modal-cancel bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-lg hover:bg-gray-400">Cancel</button>
+                        <button class="modal-confirm bg-red-500 text-white font-semibold py-2 px-6 rounded-lg hover:bg-red-600">Confirm</button>
+                    </div>
+                </div>`;
+            modalHost.classList.remove('hidden');
+            modalHost.querySelector('.modal-confirm').onclick = () => { confirmAction(); modalHost.classList.add('hidden'); };
+            modalHost.querySelector('.modal-cancel').onclick = () => modalHost.classList.add('hidden');
+        };
+
+        // --- Initial Auth Trigger ---
+        (async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Authentication failed:", error);
+                loaderView.innerHTML = '<p class="text-red-500">Could not connect. Please refresh.</p>';
+            }
+        })();
+    </script>
+</body>
+</html>
+
