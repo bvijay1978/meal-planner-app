@@ -121,16 +121,16 @@
         import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, deleteDoc, getDoc, collection, addDoc, updateDoc, deleteField } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // IMPORTANT: Replace this with your actual Firebase config object
-        const firebaseConfig = {
-        apiKey: "AIzaSyCGMQnTRIOO6MH_Xmk519YW-ZVgQc7rKrQ",
-        authDomain: "family-meal-planner-42f72.firebaseapp.com",
-        projectId: "family-meal-planner-42f72",
-        storageBucket: "family-meal-planner-42f72.firebasestorage.app",
-        messagingSenderId: "490366572565",
-        appId: "1:490366572565:web:52ddf43195b509bb47961c",
-        measurementId: "G-W88XCCD036"
-        };
+        // This is where your Firebase config object goes.
+const firebaseConfig = {
+  apiKey: "AIzaSyCGMQnTRIOO6MH_Xmk519YW-ZVgQc7rKrQ",
+  authDomain: "family-meal-planner-42f72.firebaseapp.com",
+  projectId: "family-meal-planner-42f72",
+  storageBucket: "family-meal-planner-42f72.firebasestorage.app",
+  messagingSenderId: "490366572565",
+  appId: "1:490366572565:web:52ddf43195b509bb47961c",
+  measurementId: "G-W88XCCD036"
+};
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -156,6 +156,7 @@
         const logoutBtn = document.getElementById('logout-btn');
 
         // --- Core App Flow ---
+
         const showView = (view) => {
             loaderView.classList.add('hidden');
             authModalView.classList.add('hidden');
@@ -185,14 +186,10 @@
             if (user) {
                 const userProfileRef = doc(db, 'users', user.uid);
                 const userProfileSnap = await getDoc(userProfileRef);
-
-                // --- FIX ---
-                // Use the displayName from the Firestore profile, which is more reliable
-                // than the auth object's displayName that can sometimes be slow to update.
+                
                 if (userProfileSnap.exists()) {
                     document.getElementById('user-display-name').textContent = userProfileSnap.data().displayName;
                 } else {
-                    // Fallback to the auth object's display name if the profile doc isn't ready
                     document.getElementById('user-display-name').textContent = user.displayName;
                 }
 
@@ -210,6 +207,7 @@
         });
 
         // --- Event Handlers ---
+        
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email').value;
@@ -240,7 +238,6 @@
         });
         
         logoutBtn.addEventListener('click', () => signOut(auth));
-
         document.getElementById('show-register').addEventListener('click', (e) => { e.preventDefault(); loginForm.classList.add('hidden'); registerForm.classList.remove('hidden'); authError.classList.add('hidden'); });
         document.getElementById('show-login').addEventListener('click', (e) => { e.preventDefault(); registerForm.classList.add('hidden'); loginForm.classList.remove('hidden'); authError.classList.add('hidden'); });
         
@@ -250,8 +247,7 @@
             if (!name || !user) return;
             try {
                 const newFamilyRef = await addDoc(collection(db, 'families'), {
-                    name: name,
-                    members: { [user.uid]: user.displayName }
+                    name: name, members: { [user.uid]: user.displayName }
                 });
                 await setDoc(doc(db, 'users', user.uid), { familyId: newFamilyRef.id }, { merge: true });
                 loadFamily(newFamilyRef.id);
@@ -280,6 +276,8 @@
              await updateDoc(familyDocRef, { [`members.${user.uid}`]: deleteField() });
              await updateDoc(doc(db, 'users', user.uid), { familyId: deleteField() });
         });
+
+        // --- UI Update & Planner Functions ---
         
         const createPlannerUI = (membersMap = {}) => {
             const grid = document.getElementById('meal-plan-grid');
@@ -290,6 +288,128 @@
                 dayCard.className = 'meal-card bg-white p-5 rounded-xl shadow-lg border border-gray-200';
                 let innerHTML = `<h2 class="text-2xl font-bold mb-4 text-center text-indigo-700">${day}</h2>`;
                 meals.forEach(meal => {
-                    const memberOptions = members.map(m => `<option
+                    const memberOptions = members.map(m => `<option value="${m}">${m}</option>`).join('');
+                    innerHTML += `
+                        <div class="mb-4">
+                            <label class="block text-md font-medium text-gray-700 mb-1">${meal}</label>
+                            <input type="text" id="${day.toLowerCase()}-${meal.toLowerCase()}-meal" placeholder="e.g., Salad" class="form-input w-full px-3 py-2 border rounded-md">
+                            <select id="${day.toLowerCase()}-${meal.toLowerCase()}-chef" class="form-select w-full mt-2 px-3 py-2 border rounded-md">
+                                <option value="">-- Unassigned --</option>
+                                ${memberOptions}
+                            </select>
+                        </div>`;
+                });
+                dayCard.innerHTML = innerHTML;
+                grid.appendChild(dayCard);
+            });
+        };
+        
+        const updateFamilyUI = (familyData) => {
+            if (!familyData) return;
+            document.getElementById('family-name-display').textContent = familyData.name;
+            document.getElementById('family-id-display').textContent = currentFamilyId;
+            const membersMap = familyData.members || {};
+            createPlannerUI(membersMap); 
+            
+            const membersListDiv = document.getElementById('members-list');
+            membersListDiv.innerHTML = '';
+            Object.values(membersMap).forEach(memberName => {
+                const memberTag = document.createElement('div');
+                memberTag.className = 'bg-gray-200 text-gray-800 text-sm font-semibold px-3 py-1 rounded-full';
+                memberTag.textContent = memberName;
+                membersListDiv.appendChild(memberTag);
+            });
+        };
 
+        const listenForFamilyUpdates = () => {
+            if (unsubscribeFamily) unsubscribeFamily();
+            unsubscribeFamily = onSnapshot(familyDocRef, (doc) => {
+                if (doc.exists()) {
+                    updateFamilyUI(doc.data());
+                } else {
+                    signOut(auth);
+                }
+            });
+        };
+        
+        // --- COMPLETE HELPER FUNCTIONS ---
+        
+        const updateUIWithPlanData = (planData) => {
+            daysOfWeek.forEach(day => {
+                meals.forEach(meal => {
+                    const dayKey = day.toLowerCase(), mealKey = meal.toLowerCase();
+                    const mealInput = document.getElementById(`${dayKey}-${mealKey}-meal`);
+                    const chefSelect = document.getElementById(`${dayKey}-${mealKey}-chef`);
+                    if (mealInput && chefSelect) {
+                        const data = planData?.[dayKey]?.[mealKey];
+                        mealInput.value = data?.meal || '';
+                        chefSelect.value = data?.chef || '';
+                    }
+                });
+            });
+        };
+        
+        const listenForPlanUpdates = () => {
+            if (unsubscribePlan) unsubscribePlan();
+            unsubscribePlan = onSnapshot(planDocRef, (doc) => {
+                updateUIWithPlanData(doc.exists() ? doc.data() : null);
+            });
+        };
+        
+        document.getElementById('save-plan').addEventListener('click', async () => {
+            if (!planDocRef) return;
+            const planData = {};
+            daysOfWeek.forEach(day => {
+                const dayKey = day.toLowerCase();
+                planData[dayKey] = {};
+                meals.forEach(meal => {
+                    const mealKey = meal.toLowerCase();
+                    planData[dayKey][mealKey] = {
+                        meal: document.getElementById(`${dayKey}-${mealKey}-meal`).value,
+                        chef: document.getElementById(`${dayKey}-${mealKey}-chef`).value
+                    };
+                });
+            });
+            await setDoc(planDocRef, planData);
+            showToast('Plan saved!');
+        });
+        
+        document.getElementById('clear-plan').addEventListener('click', () => {
+            showConfirmationModal('Clear Plan?', 'This will clear the plan for everyone in this family.', async () => {
+                if (planDocRef) await deleteDoc(planDocRef);
+            });
+        });
+        
+        const showToast = (message) => {
+            const toast = document.getElementById('save-toast');
+            toast.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        };
+        
+        const showConfirmationModal = (title, message, confirmAction) => {
+            const modalHost = document.getElementById('confirmation-modal');
+            modalHost.innerHTML = `
+                <div class="modal-container bg-white w-full max-w-md p-6 rounded-lg shadow-xl text-center">
+                    <h3 class="text-xl font-bold mb-4">${title}</h3>
+                    <p class="text-gray-600 mb-6">${message}</p>
+                    <div class="flex justify-center space-x-4">
+                        <button class="modal-cancel bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-lg hover:bg-gray-400">Cancel</button>
+                        <button class="modal-confirm bg-red-500 text-white font-semibold py-2 px-6 rounded-lg hover:bg-red-600">Confirm</button>
+                    </div>
+                </div>`;
+            modalHost.classList.remove('hidden');
+            modalHost.querySelector('.modal-confirm').onclick = () => { confirmAction(); modalHost.classList.add('hidden'); };
+            modalHost.querySelector('.modal-cancel').onclick = () => modalHost.classList.add('hidden');
+        };
+        
+        document.getElementById('family-id-display').addEventListener('click', () => {
+            navigator.clipboard.writeText(currentFamilyId).then(() => {
+                showToast('Family ID copied!');
+            });
+        });
+
+    </script>
+</body>
+</html>
 
