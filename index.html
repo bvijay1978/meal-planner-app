@@ -99,7 +99,8 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, deleteDoc, getDoc, collection, addDoc, updateDoc, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "MOCK_KEY", authDomain: "MOCK_DOMAIN", projectId: "MOCK_PROJECT_ID" };
+        //const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : { apiKey: "MOCK_KEY", authDomain: "MOCK_DOMAIN", projectId: "MOCK_PROJECT_ID" };
+        const firebaseConfig = {apiKey: "AIzaSyCGMQnTRIOO6MH_Xmk519YW-ZVgQc7rKrQ", authDomain: "family-meal-planner-42f72.firebaseapp.com", projectId: "family-meal-planner-42f72", storageBucket: "family-meal-planner-42f72.firebasestorage.app", messagingSenderId: "490366572565", appId: "1:490366572565:web:52ddf43195b509bb47961c", measurementId: "G-W88XCCD036"};
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-meal-planner';
         
         const app = initializeApp(firebaseConfig);
@@ -370,4 +371,5 @@
     </script>
 </body>
 </html>
+
 
