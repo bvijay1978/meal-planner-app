@@ -148,7 +148,6 @@
         const authModalView = document.getElementById('auth-modal-view');
         const familyModalView = document.getElementById('family-modal-view');
         const mainContent = document.getElementById('main-content');
-        const grid = document.getElementById('meal-plan-grid');
         
         // --- Auth Forms ---
         const loginForm = document.getElementById('login-form');
@@ -157,7 +156,6 @@
         const logoutBtn = document.getElementById('logout-btn');
 
         // --- Core App Flow ---
-
         const showView = (view) => {
             loaderView.classList.add('hidden');
             authModalView.classList.add('hidden');
@@ -187,7 +185,16 @@
             if (user) {
                 const userProfileRef = doc(db, 'users', user.uid);
                 const userProfileSnap = await getDoc(userProfileRef);
-                document.getElementById('user-display-name').textContent = user.displayName;
+
+                // --- FIX ---
+                // Use the displayName from the Firestore profile, which is more reliable
+                // than the auth object's displayName that can sometimes be slow to update.
+                if (userProfileSnap.exists()) {
+                    document.getElementById('user-display-name').textContent = userProfileSnap.data().displayName;
+                } else {
+                    // Fallback to the auth object's display name if the profile doc isn't ready
+                    document.getElementById('user-display-name').textContent = user.displayName;
+                }
 
                 if (userProfileSnap.exists() && userProfileSnap.data().familyId) {
                     loadFamily(userProfileSnap.data().familyId);
@@ -203,7 +210,6 @@
         });
 
         // --- Event Handlers ---
-        
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('login-email').value;
@@ -227,7 +233,6 @@
                 await updateProfile(userCredential.user, { displayName: name });
                 await setDoc(doc(db, 'users', userCredential.user.uid), { displayName: name });
                 authError.classList.add('hidden');
-                // onAuthStateChanged will handle the rest
             } catch (error) {
                 authError.textContent = error.message;
                 authError.classList.remove('hidden');
@@ -236,21 +241,9 @@
         
         logoutBtn.addEventListener('click', () => signOut(auth));
 
-        document.getElementById('show-register').addEventListener('click', (e) => {
-            e.preventDefault();
-            loginForm.classList.add('hidden');
-            registerForm.classList.remove('hidden');
-            authError.classList.add('hidden');
-        });
-
-        document.getElementById('show-login').addEventListener('click', (e) => {
-            e.preventDefault();
-            registerForm.classList.add('hidden');
-            loginForm.classList.remove('hidden');
-            authError.classList.add('hidden');
-        });
+        document.getElementById('show-register').addEventListener('click', (e) => { e.preventDefault(); loginForm.classList.add('hidden'); registerForm.classList.remove('hidden'); authError.classList.add('hidden'); });
+        document.getElementById('show-login').addEventListener('click', (e) => { e.preventDefault(); registerForm.classList.add('hidden'); loginForm.classList.remove('hidden'); authError.classList.add('hidden'); });
         
-        // --- Family Management Handlers ---
         document.getElementById('create-family-btn').addEventListener('click', async () => {
             const name = document.getElementById('new-family-name').value.trim();
             const user = auth.currentUser;
@@ -258,9 +251,7 @@
             try {
                 const newFamilyRef = await addDoc(collection(db, 'families'), {
                     name: name,
-                    members: {
-                        [user.uid]: user.displayName
-                    }
+                    members: { [user.uid]: user.displayName }
                 });
                 await setDoc(doc(db, 'users', user.uid), { familyId: newFamilyRef.id }, { merge: true });
                 loadFamily(newFamilyRef.id);
@@ -271,14 +262,10 @@
             const familyId = document.getElementById('join-family-id').value.trim();
             const user = auth.currentUser;
             if (!familyId || !user) return;
-            
             const familyToJoinRef = doc(db, 'families', familyId);
             const docSnap = await getDoc(familyToJoinRef);
-            
             if (docSnap.exists()) {
-                await updateDoc(familyToJoinRef, {
-                    [`members.${user.uid}`]: user.displayName
-                });
+                await updateDoc(familyToJoinRef, { [`members.${user.uid}`]: user.displayName });
                 await setDoc(doc(db, 'users', user.uid), { familyId: familyId }, { merge: true });
                 document.getElementById('join-error').classList.add('hidden');
                 loadFamily(familyId);
@@ -290,81 +277,18 @@
         document.getElementById('switch-family-btn').addEventListener('click', async () => {
              const user = auth.currentUser;
              if (!user || !familyDocRef) return;
-             // Remove user from the current family's member list
-             await updateDoc(familyDocRef, {
-                 [`members.${user.uid}`]: deleteField()
-             });
-             // Remove familyId from the user's profile
-             await updateDoc(doc(db, 'users', user.uid), {
-                 familyId: deleteField()
-             });
-             // onAuthStateChanged will then show the family selector
+             await updateDoc(familyDocRef, { [`members.${user.uid}`]: deleteField() });
+             await updateDoc(doc(db, 'users', user.uid), { familyId: deleteField() });
         });
-
-        // --- UI Update & Planner Functions --- (largely unchanged, but adapted for new data structures)
+        
         const createPlannerUI = (membersMap = {}) => {
             const grid = document.getElementById('meal-plan-grid');
             grid.innerHTML = '';
-            const members = Object.values(membersMap); // Get array of names
+            const members = Object.values(membersMap);
             daysOfWeek.forEach(day => {
                 const dayCard = document.createElement('div');
                 dayCard.className = 'meal-card bg-white p-5 rounded-xl shadow-lg border border-gray-200';
                 let innerHTML = `<h2 class="text-2xl font-bold mb-4 text-center text-indigo-700">${day}</h2>`;
                 meals.forEach(meal => {
-                    const memberOptions = members.map(m => `<option value="${m}">${m}</option>`).join('');
-                    innerHTML += `
-                        <div class="mb-4">
-                            <label class="block text-md font-medium text-gray-700 mb-1">${meal}</label>
-                            <input type="text" id="${day.toLowerCase()}-${meal.toLowerCase()}-meal" placeholder="e.g., Salad" class="form-input w-full px-3 py-2 border rounded-md">
-                            <select id="${day.toLowerCase()}-${meal.toLowerCase()}-chef" class="form-select w-full mt-2 px-3 py-2 border rounded-md">
-                                <option value="">-- Unassigned --</option>
-                                ${memberOptions}
-                            </select>
-                        </div>`;
-                });
-                dayCard.innerHTML = innerHTML;
-                grid.appendChild(dayCard);
-            });
-        };
-        
-        const updateFamilyUI = (familyData) => {
-            if (!familyData) return;
-            document.getElementById('family-name-display').textContent = familyData.name;
-            document.getElementById('family-id-display').textContent = currentFamilyId;
-            const membersMap = familyData.members || {};
-            createPlannerUI(membersMap); 
-            
-            const membersListDiv = document.getElementById('members-list');
-            membersListDiv.innerHTML = '';
-            Object.values(membersMap).forEach(memberName => {
-                const memberTag = document.createElement('div');
-                memberTag.className = 'bg-gray-200 text-gray-800 text-sm font-semibold px-3 py-1 rounded-full';
-                memberTag.textContent = memberName;
-                membersListDiv.appendChild(memberTag);
-            });
-        };
-
-        const listenForFamilyUpdates = () => {
-            if (unsubscribeFamily) unsubscribeFamily();
-            unsubscribeFamily = onSnapshot(familyDocRef, (doc) => {
-                if (doc.exists()) {
-                    updateFamilyUI(doc.data());
-                } else {
-                    // Family was deleted, handle this case
-                    signOut(auth); // Simple way to reset state
-                }
-            });
-        };
-        
-        const updateUIWithPlanData = (planData) => { /* ... Same as before ... */ };
-        const listenForPlanUpdates = () => { /* ... Same as before ... */ };
-        document.getElementById('save-plan').addEventListener('click', async () => { /* ... Same as before ... */ });
-        document.getElementById('clear-plan').addEventListener('click', () => { /* ... Same as before ... */ });
-        const showToast = (message) => { /* ... Same as before ... */ };
-        const showConfirmationModal = (title, message, confirmAction) => { /* ... Same as before ... */ };
-        document.getElementById('family-id-display').addEventListener('click', () => { /* ... Same as before ... */ });
-
-    </script>
-</body>
-</html>
+                    const memberOptions = members.map(m => `<option
 
