@@ -178,7 +178,8 @@ const firebaseConfig = {
   messagingSenderId: "490366572565",
   appId: "1:490366572565:web:52ddf43195b509bb47961c",
   measurementId: "G-W88XCCD036"
-};        
+};
+        
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -233,7 +234,7 @@ const firebaseConfig = {
             unsubscribeWeeklyPlan = onSnapshot(weeklyPlanDocRef, (docSnap) => {
                 const planData = docSnap.exists() ? docSnap.data() : {};
                 renderDashboard(planData, weekStart);
-                renderEditGrid(familyData.members || {}, weekStart, planData);
+                // FIX: Only update the edit view, do not re-render the entire grid
                 updateEditView(planData);
             });
             updateWeekTitles(weekStart);
@@ -262,7 +263,7 @@ const firebaseConfig = {
                             document.getElementById('family-name-display').textContent = familyData.name;
                             document.getElementById('family-id-display').textContent = currentFamilyId;
                             renderMembersList(familyData.members || {});
-                            renderEditGrid(familyData.members || {}, getWeekStartDate(selectedDate));
+                            renderEditGrid(familyData.members || {}, getWeekStartDate(selectedDate)); // Initial render of edit grid
                         }
                     });
                     loadFamilyMeals();
@@ -486,7 +487,68 @@ const firebaseConfig = {
             });
         };
         
-        const renderCalendar = async () => { /* ... (no changes) ... */ };
+        const renderCalendar = async () => {
+            const year = calendarDisplayDate.getFullYear();
+            const month = calendarDisplayDate.getMonth();
+            document.getElementById('month-year-header').textContent = `${calendarDisplayDate.toLocaleString('default', { month: 'long' })} ${year}`;
+            
+            const calendarGrid = document.getElementById('calendar-grid');
+            calendarGrid.innerHTML = '';
+            
+            const firstDayOfMonth = new Date(year, month, 1);
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            let startDayOfWeek = firstDayOfMonth.getDay() - 1;
+            if (startDayOfWeek === -1) startDayOfWeek = 6;
+
+            const monthStr = String(month + 1).padStart(2, '0');
+            const q = query(
+                collection(db, 'families', currentFamilyId, 'mealPlans'),
+                where(documentId(), '>=', `${year}-${monthStr}-01`),
+                where(documentId(), '<=', `${year}-${monthStr}-31`)
+            );
+            const querySnapshot = await getDocs(q);
+            const monthlyPlans = {};
+            querySnapshot.forEach(doc => {
+                 const weekStartDate = new Date(doc.id + 'T00:00:00');
+                 const plan = doc.data();
+                 for(let i=0; i<7; i++){
+                    const dayDate = new Date(weekStartDate);
+                    dayDate.setDate(weekStartDate.getDate() + i);
+                    const dayKey = formatDate(dayDate);
+                    const dayOfWeekName = daysOfWeek[i];
+                    if(plan[dayOfWeekName.toLowerCase()]) {
+                        monthlyPlans[dayKey] = plan[dayOfWeekName.toLowerCase()];
+                    }
+                 }
+            });
+
+            for (let i = 0; i < startDayOfWeek; i++) { calendarGrid.innerHTML += `<div></div>`; }
+
+            const selectedWeekStartStr = formatDate(getWeekStartDate(selectedDate));
+            for (let day = 1; day <= daysInMonth; day++) {
+                const currentDate = new Date(year, month, day);
+                const dayDiv = document.createElement('div');
+                dayDiv.className = 'calendar-day border bg-white p-2 rounded';
+                let innerHTML = `<span class="font-bold">${day}</span>`;
+                
+                if (formatDate(getWeekStartDate(currentDate)) === selectedWeekStartStr) { dayDiv.classList.add('selected-week'); }
+
+                const dateKey = formatDate(currentDate);
+                if (monthlyPlans[dateKey]) {
+                    const dayPlan = monthlyPlans[dateKey];
+                    innerHTML += `<div class="text-xs mt-1 space-y-1">`;
+                    if(dayPlan.breakfast?.meal) innerHTML += `<p class="truncate"><strong>B:</strong> ${dayPlan.breakfast.meal}</p>`;
+                    if(dayPlan.lunch?.meal) innerHTML += `<p class="truncate"><strong>L:</strong> ${dayPlan.lunch.meal}</p>`;
+                    if(dayPlan.dinner?.meal) innerHTML += `<p class="truncate"><strong>D:</strong> ${dayPlan.dinner.meal}</p>`;
+                    innerHTML += `</div>`;
+                }
+                
+                dayDiv.innerHTML = innerHTML;
+                dayDiv.addEventListener('click', () => { loadWeek(currentDate); showView('dashboard-view'); });
+                calendarGrid.appendChild(dayDiv);
+            }
+        };
+        
         const renderSharedPlans = async () => { /* ... (no changes) ... */ };
         
         const handleIngredientsClick = async (mealGroup) => {
@@ -520,7 +582,7 @@ const firebaseConfig = {
         const handlePasteMeal = (targetInput) => {
             if (copiedData && copiedData.type === 'meal') {
                 targetInput.value = copiedData.meal;
-                targetInput.closest('.mb-4').querySelector('.meal-chef-select').value = copiedData.chef;
+                targetInput.closest('div').parentElement.querySelector('.meal-chef-select').value = copiedData.chef;
                 copiedData = null;
                 showToast('Pasted!');
             }
@@ -610,7 +672,7 @@ const firebaseConfig = {
         document.getElementById('calendar-prev-month').addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() - 1); renderCalendar(); });
         document.getElementById('calendar-next-month').addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() + 1); renderCalendar(); });
         document.getElementById('clear-plan').addEventListener('click', () => { showConfirmationModal('Clear This Week?', 'This will clear the plan for the currently selected week.', async () => { const weekId = formatDate(getWeekStartDate(selectedDate)); await deleteDoc(doc(db, 'families', currentFamilyId, 'mealPlans', weekId)); showToast('Plan for this week has been cleared.'); }); });
-        document.getElementById('copy-prev-week').addEventListener('click', async () => { const prevWeekDate = new Date(selectedDate); prevWeekDate.setDate(prevWeekDate.getDate() - 7); const prevWeekId = formatDate(getWeekStartDate(prevWeekDate)); const docSnap = await getDoc(doc(db, 'families', currentFamilyId, 'mealPlans', prevWeekId)); if (docSnap.exists()) { updateEditView(docSnap.data()); showToast('Previous week copied. Make changes and save.'); } else { showToast('No plan found for the previous week.'); } });
+        document.getElementById('copy-prev-week').addEventListener('click', async () => { const prevWeekDate = new Date(selectedDate); prevWeekDate.setDate(prevWeekDate.getDate() - 7); const prevWeekId = formatDate(getWeekStartDate(prevWeekDate)); const docSnap = await getDoc(doc(db, 'families', currentFamilyId, 'mealPlans', prevWeekId)); if (docSnap.exists()) { renderEditGrid(familyData.members || {}, getWeekStartDate(selectedDate), docSnap.data()); updateEditView(docSnap.data()); showToast('Previous week copied. Make changes and save.'); } else { showToast('No plan found for the previous week.'); } });
         document.getElementById('share-week').addEventListener('click', async () => { showConfirmationModal('Share Plan?', 'This will make this week\'s plan visible to other families.', async () => { const weekId = formatDate(getWeekStartDate(selectedDate)); const planSnap = await getDoc(doc(db, 'families', currentFamilyId, 'mealPlans', weekId)); if (planSnap.exists()) { await addDoc(collection(db, 'publishedPlans'), { ...planSnap.data(), familyName: familyData.name, sharedDate: new Date() }); showToast('Plan shared successfully!'); } else { showToast('Cannot share an empty plan.'); } }); });
         document.getElementById('login-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value); } catch (error) { document.getElementById('auth-error').textContent = error.message; document.getElementById('auth-error').classList.remove('hidden'); } });
         document.getElementById('register-form').addEventListener('submit', async (e) => { e.preventDefault(); try { const cred = await createUserWithEmailAndPassword(auth, document.getElementById('register-email').value, document.getElementById('register-password').value); await updateProfile(cred.user, { displayName: document.getElementById('register-name').value }); await setDoc(doc(db, 'users', cred.user.uid), { displayName: document.getElementById('register-name').value }); } catch (error) { document.getElementById('auth-error').textContent = error.message; document.getElementById('auth-error').classList.remove('hidden'); } });
