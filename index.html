@@ -178,8 +178,7 @@ const firebaseConfig = {
   messagingSenderId: "490366572565",
   appId: "1:490366572565:web:52ddf43195b509bb47961c",
   measurementId: "G-W88XCCD036"
-};
-        
+};        
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -228,13 +227,14 @@ const firebaseConfig = {
         const loadWeek = (date) => {
             selectedDate = new Date(date);
             const weekStart = getWeekStartDate(selectedDate);
+            renderEditGrid(familyData.members || {}, weekStart); // Re-render grid for new week dates
+
             const weekId = formatDate(weekStart);
             if(unsubscribeWeeklyPlan) unsubscribeWeeklyPlan();
             const weeklyPlanDocRef = doc(db, 'families', currentFamilyId, 'mealPlans', weekId);
             unsubscribeWeeklyPlan = onSnapshot(weeklyPlanDocRef, (docSnap) => {
                 const planData = docSnap.exists() ? docSnap.data() : {};
                 renderDashboard(planData, weekStart);
-                // FIX: Only update the edit view, do not re-render the entire grid
                 updateEditView(planData);
             });
             updateWeekTitles(weekStart);
@@ -263,7 +263,7 @@ const firebaseConfig = {
                             document.getElementById('family-name-display').textContent = familyData.name;
                             document.getElementById('family-id-display').textContent = currentFamilyId;
                             renderMembersList(familyData.members || {});
-                            renderEditGrid(familyData.members || {}, getWeekStartDate(selectedDate)); // Initial render of edit grid
+                            updateChefDropdowns(familyData.members || {});
                         }
                     });
                     loadFamilyMeals();
@@ -287,6 +287,18 @@ const firebaseConfig = {
                 showOverlayView('auth');
             }
         });
+
+        const updateChefDropdowns = (members = {}) => {
+            const memberNames = Object.values(members);
+            document.querySelectorAll('.meal-chef-select').forEach(select => {
+                const currentValue = select.value;
+                select.innerHTML = `<option value="">-- Unassigned --</option>`;
+                memberNames.forEach(name => {
+                    select.innerHTML += `<option value="${name}">${name}</option>`;
+                });
+                select.value = currentValue;
+            });
+        };
         
         const loadFamilyMeals = () => {
             if (unsubscribeMeals) unsubscribeMeals();
@@ -464,14 +476,17 @@ const firebaseConfig = {
                     }
                 });
                 
+                // Remove old additional meal rows before adding new ones
+                dayCard.querySelectorAll('.additional-meal-row').forEach(row => row.remove());
+
                 const additionalMeals = planForDay.additionalMeals || [];
+                const mealsContainer = dayCard.querySelector('.meals-container');
+                const memberNames = Object.values(familyData.members || {});
                 additionalMeals.forEach(mealData => {
-                    const mealGroup = dayCard.querySelector(`.additional-meal-row[data-id="${mealData.id}"]`);
-                    if (mealGroup) {
-                        mealGroup.querySelector('.meal-type-input').value = mealData.type || '';
-                        mealGroup.querySelector('.meal-name-input').value = mealData.meal || '';
-                        mealGroup.querySelector('.meal-chef-select').value = mealData.chef || '';
-                    }
+                    const newGroup = createMealInputGroup(day, mealData.type, memberNames, true, mealData.id, true);
+                    newGroup.querySelector('.meal-name-input').value = mealData.meal || '';
+                    newGroup.querySelector('.meal-chef-select').value = mealData.chef || '';
+                    mealsContainer.appendChild(newGroup);
                 });
             });
         };
@@ -540,6 +555,11 @@ const firebaseConfig = {
                     if(dayPlan.breakfast?.meal) innerHTML += `<p class="truncate"><strong>B:</strong> ${dayPlan.breakfast.meal}</p>`;
                     if(dayPlan.lunch?.meal) innerHTML += `<p class="truncate"><strong>L:</strong> ${dayPlan.lunch.meal}</p>`;
                     if(dayPlan.dinner?.meal) innerHTML += `<p class="truncate"><strong>D:</strong> ${dayPlan.dinner.meal}</p>`;
+                    if (dayPlan.additionalMeals?.length > 0) {
+                        dayPlan.additionalMeals.forEach(addMeal => {
+                            if(addMeal.meal) innerHTML += `<p class="truncate"><strong>${addMeal.type.charAt(0)}:</strong> ${addMeal.meal}</p>`;
+                        });
+                    }
                     innerHTML += `</div>`;
                 }
                 
@@ -549,7 +569,31 @@ const firebaseConfig = {
             }
         };
         
-        const renderSharedPlans = async () => { /* ... (no changes) ... */ };
+        const renderSharedPlans = async () => {
+            const listDiv = document.getElementById('shared-plans-list');
+            listDiv.innerHTML = '<div class="text-center p-4">Loading shared plans...</div>';
+            const q = query(collection(db, 'publishedPlans'), orderBy('sharedDate', 'desc'), limit(20));
+            const querySnapshot = await getDocs(q);
+            listDiv.innerHTML = '';
+            if (querySnapshot.empty) { listDiv.innerHTML = '<div class="text-center p-4">No shared plans yet. Be the first!</div>'; }
+            querySnapshot.forEach(doc => {
+                const plan = doc.data();
+                const planDiv = document.createElement('div');
+                planDiv.className = 'bg-white p-4 rounded-lg shadow flex justify-between items-center';
+                planDiv.innerHTML = `<div><p class="font-bold">${plan.familyName}'s Plan</p><p class="text-sm text-gray-500">Shared on ${new Date(plan.sharedDate.seconds * 1000).toLocaleDateString()}</p></div>
+                                     <button class="import-btn bg-blue-500 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-600">Import</button>`;
+                planDiv.querySelector('.import-btn').addEventListener('click', () => {
+                    showConfirmationModal('Import Plan?', 'This will overwrite the plan for your currently selected week.', () => {
+                        const weekStart = getWeekStartDate(selectedDate);
+                        renderEditGrid(familyData.members || {}, weekStart, plan);
+                        updateEditView(plan);
+                        showView('edit-view');
+                        showToast('Plan imported. Make changes and save.');
+                    });
+                });
+                listDiv.appendChild(planDiv);
+            });
+        };
         
         const handleIngredientsClick = async (mealGroup) => {
             const mealName = mealGroup.querySelector('.meal-name-input').value.trim();
@@ -661,7 +705,6 @@ const firebaseConfig = {
             showToast('Plan saved!');
         });
         
-        // --- All other full event listeners (auth, clear, share, etc.) are here and complete ---
         document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', (e) => showView(e.currentTarget.dataset.view)));
         const handlePrevWeek = () => { const newDate = getWeekStartDate(selectedDate); newDate.setDate(newDate.getDate() - 7); loadWeek(newDate); };
         const handleNextWeek = () => { const newDate = getWeekStartDate(selectedDate); newDate.setDate(newDate.getDate() + 7); loadWeek(newDate); };
