@@ -12,7 +12,9 @@
         .view.active { display: block; }
         .nav-item { transition: all 0.2s ease-in-out; }
         .nav-item.active { border-bottom-color: #4f46e5; color: #4f46e5; }
-        .calendar-day { min-height: 120px; }
+        .calendar-day { min-height: 120px; cursor: pointer; transition: background-color 0.2s; }
+        .calendar-day:hover { background-color: #eef2ff; }
+        .calendar-day.selected-week { background-color: #c7d2fe; border-color: #818cf8; }
         .loader { border-top-color: #4f46e5; animation: spin 1s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
         .toast-notification { animation: fadeInOut 3s ease-in-out forwards; }
@@ -98,12 +100,20 @@
 
         <main>
             <div id="dashboard-view" class="view active">
-                 <h2 class="text-2xl font-bold text-center mb-4">This Week's Plan</h2>
+                <div class="flex justify-between items-center mb-4 max-w-2xl mx-auto">
+                    <button id="dashboard-prev-week" class="bg-white p-2 rounded-full shadow hover:bg-gray-200">&lt; Prev Week</button>
+                    <h2 id="dashboard-title" class="text-2xl font-bold text-center"></h2>
+                    <button id="dashboard-next-week" class="bg-white p-2 rounded-full shadow hover:bg-gray-200">Next Week &gt;</button>
+                </div>
                  <div id="dashboard-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6"></div>
             </div>
 
             <div id="edit-view" class="view">
-                <h2 class="text-2xl font-bold text-center mb-4">Edit This Week's Plan</h2>
+                 <div class="flex justify-between items-center mb-4 max-w-2xl mx-auto">
+                    <button id="edit-prev-week" class="bg-white p-2 rounded-full shadow hover:bg-gray-200">&lt; Prev Week</button>
+                    <h2 id="edit-title" class="text-2xl font-bold text-center"></h2>
+                    <button id="edit-next-week" class="bg-white p-2 rounded-full shadow hover:bg-gray-200">Next Week &gt;</button>
+                </div>
                 <div class="max-w-4xl mx-auto mb-6 p-6 bg-white rounded-xl shadow-lg border border-gray-200">
                     <h3 class="text-xl font-bold mb-2 text-gray-800">Family Members</h3>
                     <div id="members-list" class="flex flex-wrap gap-2"></div>
@@ -118,9 +128,9 @@
             <div id="calendar-view" class="view">
                  <div class="bg-white p-6 rounded-lg shadow">
                     <div class="flex justify-between items-center mb-4">
-                        <button id="prev-month" class="p-2 rounded-full hover:bg-gray-200">&lt;</button>
+                        <button id="calendar-prev-month" class="p-2 rounded-full hover:bg-gray-200">&lt;</button>
                         <h2 id="month-year-header" class="text-2xl font-bold"></h2>
-                        <button id="next-month" class="p-2 rounded-full hover:bg-gray-200">&gt;</button>
+                        <button id="calendar-next-month" class="p-2 rounded-full hover:bg-gray-200">&gt;</button>
                     </div>
                     <div class="grid grid-cols-7 gap-1 text-center font-semibold text-gray-600 mb-2">
                         <div>Mon</div><div>Tue</div><div>Wed</div><div>Thu</div><div>Fri</div><div>Sat</div><div>Sun</div>
@@ -139,30 +149,29 @@
         import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, setDoc, onSnapshot, deleteDoc, getDoc, collection, addDoc, updateDoc, deleteField, query, where, getDocs, documentId } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        const firebaseConfig = {
-        apiKey: "AIzaSyCGMQnTRIOO6MH_Xmk519YW-ZVgQc7rKrQ",
-        authDomain: "family-meal-planner-42f72.firebaseapp.com",
-        projectId: "family-meal-planner-42f72",
-        storageBucket: "family-meal-planner-42f72.firebasestorage.app",
-        messagingSenderId: "490366572565",
-        appId: "1:490366572565:web:52ddf43195b509bb47961c",
-        measurementId: "G-W88XCCD036"
-        };
+const firebaseConfig = {
+  apiKey: "AIzaSyCGMQnTRIOO6MH_Xmk519YW-ZVgQc7rKrQ",
+  authDomain: "family-meal-planner-42f72.firebaseapp.com",
+  projectId: "family-meal-planner-42f72",
+  storageBucket: "family-meal-planner-42f72.firebasestorage.app",
+  messagingSenderId: "490366572565",
+  appId: "1:490366572565:web:52ddf43195b509bb47961c",
+  measurementId: "G-W88XCCD036"
+};
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         
         let currentFamilyId = null;
-        let familyDocRef, weeklyPlanDocRef;
+        let familyDocRef;
         let unsubscribeFamily, unsubscribeWeeklyPlan;
         const daysOfWeek = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         const meals = ['Breakfast', 'Lunch', 'Dinner'];
-        let calendarDate = new Date();
+        let selectedDate = new Date();
+        let calendarDisplayDate = new Date();
 
         const mainContent = document.getElementById('main-content');
-        const navItems = document.querySelectorAll('.nav-item');
-        const views = document.querySelectorAll('.view');
         const loadingOverlay = document.getElementById('loading-overlay');
         const loaderView = document.getElementById('loader-view');
         const authModalView = document.getElementById('auth-modal-view');
@@ -184,20 +193,41 @@
             return new Date(d.setDate(diff));
         };
         const formatDate = (date) => date.toISOString().split('T')[0];
-
-        const loadFamily = (familyId) => {
-            currentFamilyId = familyId;
-            familyDocRef = doc(db, 'families', familyId);
-            const currentWeekId = formatDate(getWeekStartDate(new Date()));
-            weeklyPlanDocRef = doc(db, 'families', familyId, 'mealPlans', currentWeekId);
-
-            listenForFamilyUpdates();
-            listenForWeeklyPlanUpdates();
-            
-            mainContent.classList.remove('hidden');
-            loadingOverlay.classList.add('hidden');
-        };
         
+        const showView = (viewId) => {
+            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            document.querySelectorAll('.nav-item').forEach(n => {
+                n.classList.toggle('active', n.dataset.view === viewId);
+            });
+             if (viewId === 'calendar-view') renderCalendar();
+        };
+
+        const loadWeek = (date) => {
+            selectedDate = new Date(date);
+            const weekStart = getWeekStartDate(selectedDate);
+            const weekId = formatDate(weekStart);
+
+            if(unsubscribeWeeklyPlan) unsubscribeWeeklyPlan();
+            const weeklyPlanDocRef = doc(db, 'families', currentFamilyId, 'mealPlans', weekId);
+            
+            unsubscribeWeeklyPlan = onSnapshot(weeklyPlanDocRef, (docSnap) => {
+                const planData = docSnap.exists() ? docSnap.data() : {};
+                renderDashboard(planData, weekStart);
+                renderEditGrid(familyDocRef ? familyDocRef.members : {}, weekStart);
+                updateEditView(planData);
+            });
+            updateWeekTitles(weekStart);
+        };
+
+        const updateWeekTitles = (weekStart) => {
+            const endOfWeek = new Date(weekStart);
+            endOfWeek.setDate(weekStart.getDate() + 6);
+            const title = `${weekStart.toLocaleDateString()} - ${endOfWeek.toLocaleDateString()}`;
+            document.getElementById('dashboard-title').textContent = title;
+            document.getElementById('edit-title').textContent = title;
+        };
+
         onAuthStateChanged(auth, async (user) => {
             if (user) {
                 const userProfileRef = doc(db, 'users', user.uid);
@@ -205,7 +235,24 @@
                 document.getElementById('user-display-name').textContent = user.displayName;
 
                 if (userProfileSnap.exists() && userProfileSnap.data().familyId) {
-                    loadFamily(userProfileSnap.data().familyId);
+                    currentFamilyId = userProfileSnap.data().familyId;
+                    familyDocRef = doc(db, 'families', currentFamilyId);
+                    
+                    if(unsubscribeFamily) unsubscribeFamily();
+                    unsubscribeFamily = onSnapshot(familyDocRef, (docSnap) => {
+                        if (docSnap.exists()) {
+                            const familyData = docSnap.data();
+                            familyDocRef.members = familyData.members || {};
+                            document.getElementById('family-name-display').textContent = familyData.name;
+                            document.getElementById('family-id-display').textContent = currentFamilyId;
+                            renderMembersList(familyDocRef.members);
+                            renderEditGrid(familyDocRef.members, getWeekStartDate(selectedDate));
+                        }
+                    });
+                    
+                    loadWeek(new Date());
+                    mainContent.classList.remove('hidden');
+                    loadingOverlay.classList.add('hidden');
                 } else {
                     mainContent.classList.add('hidden');
                     loadingOverlay.classList.remove('hidden');
@@ -221,81 +268,38 @@
             }
         });
 
-        const listenForFamilyUpdates = () => {
-            if (unsubscribeFamily) unsubscribeFamily();
-            unsubscribeFamily = onSnapshot(familyDocRef, (docSnap) => {
-                if (docSnap.exists()) {
-                    const familyData = docSnap.data();
-                    const members = familyData.members || {};
-                    document.getElementById('family-name-display').textContent = familyData.name;
-                    document.getElementById('family-id-display').textContent = currentFamilyId;
-                    renderMembersList(members);
-                    renderEditGrid(members);
-                    // Re-fetch weekly plan to update chef dropdowns
-                    listenForWeeklyPlanUpdates();
-                }
-            });
-        };
-
-        const listenForWeeklyPlanUpdates = () => {
-            if (unsubscribeWeeklyPlan) unsubscribeWeeklyPlan();
-            unsubscribeWeeklyPlan = onSnapshot(weeklyPlanDocRef, (docSnap) => {
-                const planData = docSnap.exists() ? docSnap.data() : {};
-                renderDashboard(planData);
-                updateEditView(planData);
-            });
-        };
-
-        const renderDashboard = (planData) => {
+        const renderDashboard = (planData, weekStart) => {
             const grid = document.getElementById('dashboard-grid');
             grid.innerHTML = '';
-            const weekStart = getWeekStartDate(new Date());
-
             daysOfWeek.forEach((day, index) => {
                 const currentDate = new Date(weekStart);
                 currentDate.setDate(weekStart.getDate() + index);
                 const formattedDate = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
                 const dayCard = document.createElement('div');
                 dayCard.className = 'bg-white p-4 rounded-lg shadow';
                 let innerHTML = `<h3 class="text-xl font-bold mb-1 text-center text-indigo-700">${day}</h3><p class="text-sm text-center text-gray-500 mb-3">${formattedDate}</p>`;
                 meals.forEach(meal => {
                     const data = planData?.[day.toLowerCase()]?.[meal.toLowerCase()];
-                    innerHTML += `<div class="mb-3">
-                            <p class="font-semibold text-gray-700">${meal}</p>
-                            <p class="text-gray-600">${data?.meal || 'Not planned'}</p>
-                            <p class="text-sm text-gray-500">Chef: ${data?.chef || 'N/A'}</p>
-                        </div>`;
+                    innerHTML += `<div class="mb-3"><p class="font-semibold text-gray-700">${meal}</p><p class="text-gray-600">${data?.meal || 'Not planned'}</p><p class="text-sm text-gray-500">Chef: ${data?.chef || 'N/A'}</p></div>`;
                 });
                 dayCard.innerHTML = innerHTML;
                 grid.appendChild(dayCard);
             });
         };
 
-        const renderEditGrid = (members = {}) => {
+        const renderEditGrid = (members = {}, weekStart) => {
             const grid = document.getElementById('edit-grid');
             grid.innerHTML = '';
             const memberNames = Object.values(members);
-            const weekStart = getWeekStartDate(new Date());
-
             daysOfWeek.forEach((day, index) => {
                 const currentDate = new Date(weekStart);
                 currentDate.setDate(weekStart.getDate() + index);
-                const formattedDate = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-
                 const dayCard = document.createElement('div');
                 dayCard.className = 'bg-white p-4 rounded-lg shadow';
-                let innerHTML = `<h3 class="text-xl font-bold mb-1 text-center">${day}</h3><p class="text-sm text-center text-gray-500 mb-3">${formattedDate}</p>`;
+                let innerHTML = `<h3 class="text-xl font-bold mb-1 text-center">${day}</h3><p class="text-sm text-center text-gray-500 mb-3">${currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>`;
                 meals.forEach(meal => {
                     const memberOptions = memberNames.map(m => `<option value="${m}">${m}</option>`).join('');
-                    innerHTML += `<div class="mb-4">
-                            <label class="block text-sm font-medium text-gray-700 mb-1">${meal}</label>
-                            <input type="text" id="${day}-${meal}-meal" placeholder="Meal name" class="w-full px-3 py-2 border rounded-md">
-                            <select id="${day}-${meal}-chef" class="w-full mt-2 px-3 py-2 border rounded-md">
-                                <option value="">-- Unassigned --</option>
-                                ${memberOptions}
-                            </select>
-                        </div>`;
+                    innerHTML += `<div class="mb-4"><label class="block text-sm font-medium text-gray-700 mb-1">${meal}</label><input type="text" id="${day}-${meal}-meal" placeholder="Meal name" class="w-full px-3 py-2 border rounded-md"><select id="${day}-${meal}-chef" class="w-full mt-2 px-3 py-2 border rounded-md"><option value="">-- Unassigned --</option>${memberOptions}</select></div>`;
                 });
                 dayCard.innerHTML = innerHTML;
                 grid.appendChild(dayCard);
@@ -326,109 +330,74 @@
                 listDiv.appendChild(memberTag);
             });
         };
-
+        
         const renderCalendar = async () => {
-            const year = calendarDate.getFullYear();
-            const month = calendarDate.getMonth();
-            document.getElementById('month-year-header').textContent = `${calendarDate.toLocaleString('default', { month: 'long' })} ${year}`;
-
+            const year = calendarDisplayDate.getFullYear();
+            const month = calendarDisplayDate.getMonth();
+            document.getElementById('month-year-header').textContent = `${calendarDisplayDate.toLocaleString('default', { month: 'long' })} ${year}`;
+            
+            const calendarGrid = document.getElementById('calendar-grid');
+            calendarGrid.innerHTML = '';
+            
             const firstDayOfMonth = new Date(year, month, 1);
             const daysInMonth = new Date(year, month + 1, 0).getDate();
             let startDayOfWeek = firstDayOfMonth.getDay() - 1;
             if (startDayOfWeek === -1) startDayOfWeek = 6;
-
-            const calendarGrid = document.getElementById('calendar-grid');
-            calendarGrid.innerHTML = '';
-
-            const monthStr = String(month + 1).padStart(2, '0');
-            const q = query(
-                collection(db, 'families', currentFamilyId, 'mealPlans'),
-                where(documentId(), '>=', `${year}-${monthStr}-01`),
-                where(documentId(), '<=', `${year}-${monthStr}-31`)
-            );
-            const querySnapshot = await getDocs(q);
-            const monthlyPlans = {};
-            querySnapshot.forEach(doc => {
-                 const weekStartDate = new Date(doc.id + 'T00:00:00');
-                 const plan = doc.data();
-                 for(let i=0; i<7; i++){
-                    const dayDate = new Date(weekStartDate);
-                    dayDate.setDate(weekStartDate.getDate() + i);
-                    const dayKey = formatDate(dayDate);
-                    const dayOfWeekName = daysOfWeek[i];
-                    if(plan[dayOfWeekName.toLowerCase()]) {
-                        monthlyPlans[dayKey] = plan[dayOfWeekName.toLowerCase()];
-                    }
-                 }
-            });
-
+            
             for (let i = 0; i < startDayOfWeek; i++) {
                 calendarGrid.innerHTML += `<div></div>`;
             }
 
+            const selectedWeekStartStr = formatDate(getWeekStartDate(selectedDate));
+
             for (let day = 1; day <= daysInMonth; day++) {
+                const currentDate = new Date(year, month, day);
                 const dayDiv = document.createElement('div');
                 dayDiv.className = 'calendar-day border bg-white p-2 rounded';
                 dayDiv.innerHTML = `<span class="font-bold">${day}</span>`;
-                const currentDate = new Date(year, month, day);
-                const dateKey = formatDate(currentDate);
 
-                if (monthlyPlans[dateKey]) {
-                    const dayPlan = monthlyPlans[dateKey];
-                    dayDiv.innerHTML += `<div class="text-xs mt-1">
-                            <p class="truncate"><strong>B:</strong> ${dayPlan.breakfast?.meal || ''}</p>
-                            <p class="truncate"><strong>L:</strong> ${dayPlan.lunch?.meal || ''}</p>
-                            <p class="truncate"><strong>D:</strong> ${dayPlan.dinner?.meal || ''}</p>
-                        </div>`;
+                if (formatDate(getWeekStartDate(currentDate)) === selectedWeekStartStr) {
+                    dayDiv.classList.add('selected-week');
                 }
+                
+                dayDiv.addEventListener('click', () => {
+                    loadWeek(currentDate);
+                    showView('dashboard-view');
+                });
                 calendarGrid.appendChild(dayDiv);
             }
         };
-
-        // --- Event Listeners ---
-        navItems.forEach(item => {
-            item.addEventListener('click', () => {
-                navItems.forEach(i => i.classList.remove('active'));
-                item.classList.add('active');
-                views.forEach(v => v.classList.remove('active'));
-                const viewId = item.getAttribute('data-view');
-                document.getElementById(viewId).classList.add('active');
-                if (viewId === 'calendar-view') renderCalendar();
-            });
-        });
         
-        document.getElementById('prev-month').addEventListener('click', () => {
-            calendarDate.setMonth(calendarDate.getMonth() - 1);
-            renderCalendar();
-        });
-        document.getElementById('next-month').addEventListener('click', () => {
-            calendarDate.setMonth(calendarDate.getMonth() + 1);
-            renderCalendar();
-        });
+        document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', (e) => showView(e.currentTarget.dataset.view)));
+
+        const handlePrevWeek = () => { const newDate = getWeekStartDate(selectedDate); newDate.setDate(newDate.getDate() - 7); loadWeek(newDate); };
+        const handleNextWeek = () => { const newDate = getWeekStartDate(selectedDate); newDate.setDate(newDate.getDate() + 7); loadWeek(newDate); };
+
+        document.getElementById('dashboard-prev-week').addEventListener('click', handlePrevWeek);
+        document.getElementById('dashboard-next-week').addEventListener('click', handleNextWeek);
+        document.getElementById('edit-prev-week').addEventListener('click', handlePrevWeek);
+        document.getElementById('edit-next-week').addEventListener('click', handleNextWeek);
+        
+        document.getElementById('calendar-prev-month').addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() - 1); renderCalendar(); });
+        document.getElementById('calendar-next-month').addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() + 1); renderCalendar(); });
 
         document.getElementById('save-plan').addEventListener('click', async () => {
+            const weekId = formatDate(getWeekStartDate(selectedDate));
+            const planDocRef = doc(db, 'families', currentFamilyId, 'mealPlans', weekId);
             const planData = {};
             daysOfWeek.forEach(day => {
-                const dayKey = day.toLowerCase();
-                planData[dayKey] = {};
+                planData[day.toLowerCase()] = {};
                 meals.forEach(meal => {
-                    const mealKey = meal.toLowerCase();
-                    planData[dayKey][mealKey] = {
+                    planData[day.toLowerCase()][meal.toLowerCase()] = {
                         meal: document.getElementById(`${day}-${meal}-meal`).value,
                         chef: document.getElementById(`${day}-${meal}-chef`).value
                     };
                 });
             });
-            await setDoc(weeklyPlanDocRef, planData, { merge: true });
+            await setDoc(planDocRef, planData, { merge: true });
             showToast('Plan saved!');
         });
-        
-        document.getElementById('clear-plan').addEventListener('click', () => {
-            showConfirmationModal('Clear This Week?', 'This will clear the plan for the current week.', async () => {
-                await deleteDoc(weeklyPlanDocRef);
-            });
-        });
-        
+
         const showToast = (message) => {
             const toast = document.getElementById('save-toast');
             toast.textContent = message;
@@ -451,7 +420,15 @@
             modalHost.querySelector('.modal-cancel').onclick = () => modalHost.classList.add('hidden');
         };
 
-        // --- Auth & Family Button Logic ---
+        document.getElementById('clear-plan').addEventListener('click', () => {
+            showConfirmationModal('Clear This Week?', 'This will clear the plan for the currently selected week.', async () => {
+                const weekId = formatDate(getWeekStartDate(selectedDate));
+                const planDocRef = doc(db, 'families', currentFamilyId, 'mealPlans', weekId);
+                await deleteDoc(planDocRef);
+                showToast('Plan for this week has been cleared.');
+            });
+        });
+        
         document.getElementById('login-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value); } catch (error) { document.getElementById('auth-error').textContent = error.message; document.getElementById('auth-error').classList.remove('hidden'); } });
         document.getElementById('register-form').addEventListener('submit', async (e) => { e.preventDefault(); try { const cred = await createUserWithEmailAndPassword(auth, document.getElementById('register-email').value, document.getElementById('register-password').value); await updateProfile(cred.user, { displayName: document.getElementById('register-name').value }); await setDoc(doc(db, 'users', cred.user.uid), { displayName: document.getElementById('register-name').value }); } catch (error) { document.getElementById('auth-error').textContent = error.message; document.getElementById('auth-error').classList.remove('hidden'); } });
         document.getElementById('show-register').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); });
@@ -461,7 +438,6 @@
         document.getElementById('join-family-btn').addEventListener('click', async () => { const user = auth.currentUser; const familyId = document.getElementById('join-family-id').value; if (!familyId || !user) return; const familyRef = doc(db, 'families', familyId); const docSnap = await getDoc(familyRef); if (docSnap.exists()) { await updateDoc(familyRef, { [`members.${user.uid}`]: user.displayName }); await setDoc(doc(db, 'users', user.uid), { familyId: familyId }, { merge: true }); } else { document.getElementById('join-error').classList.remove('hidden'); } });
         document.getElementById('switch-family-btn').addEventListener('click', async () => { const user = auth.currentUser; if (!user || !familyDocRef) return; await updateDoc(familyDocRef, { [`members.${user.uid}`]: deleteField() }); await updateDoc(doc(db, 'users', user.uid), { familyId: deleteField() }); });
         document.getElementById('family-id-display').addEventListener('click', () => { navigator.clipboard.writeText(currentFamilyId).then(() => showToast('Family ID copied!')); });
-
     </script>
 </body>
 </html>
