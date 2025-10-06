@@ -20,19 +20,58 @@
             0%, 100% { opacity: 0; transform: translateY(10px); }
             10%, 90% { opacity: 1; transform: translateY(0); }
         }
+        .modal-overlay { transition: opacity 0.3s ease; }
+        .modal-container { transition: all 0.3s ease; }
     </style>
 </head>
 <body class="bg-gray-100 text-gray-800">
 
     <!-- Primary Overlay for Loading, Auth, and Family Selection -->
     <div id="loading-overlay" class="fixed inset-0 bg-white z-50 flex flex-col items-center justify-center p-4">
-        <!-- Loader, Auth, and Family Views remain the same -->
         <div id="loader-view">
              <div class="loader ease-linear rounded-full border-8 border-t-8 border-gray-200 h-24 w-24 mb-4"></div>
              <p class="text-xl text-gray-700">Connecting...</p>
         </div>
-        <div id="auth-modal-view" class="hidden w-full max-w-sm"><!-- Auth forms here --></div>
-        <div id="family-modal-view" class="hidden w-full max-w-md"><!-- Family forms here --></div>
+        <div id="auth-modal-view" class="hidden w-full max-w-sm">
+             <div class="bg-white p-8 rounded-2xl shadow-2xl">
+                <form id="login-form">
+                    <h2 class="text-3xl font-bold text-center text-gray-800 mb-6">Log In</h2>
+                    <input type="email" id="login-email" placeholder="Email" required class="w-full mb-4 px-4 py-2 border border-gray-300 rounded-lg">
+                    <input type="password" id="login-password" placeholder="Password" required class="w-full mb-4 px-4 py-2 border border-gray-300 rounded-lg">
+                    <button type="submit" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Log In</button>
+                    <p class="text-center text-sm text-gray-600 mt-4">No account? <a href="#" id="show-register" class="text-indigo-600 hover:underline">Register</a></p>
+                </form>
+                <form id="register-form" class="hidden">
+                    <h2 class="text-3xl font-bold text-center text-gray-800 mb-6">Register</h2>
+                    <input type="text" id="register-name" placeholder="Your Name" required class="w-full mb-4 px-4 py-2 border border-gray-300 rounded-lg">
+                    <input type="email" id="register-email" placeholder="Email" required class="w-full mb-4 px-4 py-2 border border-gray-300 rounded-lg">
+                    <input type="password" id="register-password" placeholder="Password" required class="w-full mb-4 px-4 py-2 border border-gray-300 rounded-lg">
+                    <button type="submit" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Register</button>
+                     <p class="text-center text-sm text-gray-600 mt-4">Have an account? <a href="#" id="show-login" class="text-indigo-600 hover:underline">Log in</a></p>
+                </form>
+                 <p id="auth-error" class="text-red-500 text-sm mt-3 text-center hidden"></p>
+            </div>
+        </div>
+        <div id="family-modal-view" class="hidden w-full max-w-md">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl">
+                 <h2 class="text-3xl font-bold text-center text-gray-800 mb-6">Join or Create a Family</h2>
+                <div class="mb-6">
+                    <h3 class="text-xl font-semibold mb-3 text-gray-700">Create New Family</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="new-family-name" placeholder="Family Name" class="flex-grow px-4 py-2 border rounded-lg">
+                        <button id="create-family-btn" class="bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700">Create</button>
+                    </div>
+                </div>
+                <div>
+                    <h3 class="text-xl font-semibold mb-3 text-gray-700">Join Existing Family</h3>
+                    <div class="flex gap-2">
+                        <input type="text" id="join-family-id" placeholder="Family ID" class="flex-grow px-4 py-2 border rounded-lg">
+                        <button id="join-family-btn" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700">Join</button>
+                    </div>
+                    <p id="join-error" class="text-red-500 text-sm mt-2 hidden">Family ID not found.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Main Application Content -->
@@ -42,7 +81,6 @@
             <p id="family-name-display" class="mt-2 text-2xl text-indigo-600 font-semibold"></p>
         </header>
         
-        <!-- User/Family Info & Logout -->
         <div class="max-w-4xl mx-auto mb-6 p-4 bg-white rounded-lg shadow text-center">
             <p class="mb-2">Logged in as: <strong id="user-display-name"></strong></p>
             <p class="mb-2">Family ID: <strong id="family-id-display" class="font-mono bg-gray-200 px-2 py-1 rounded cursor-pointer" title="Click to copy"></strong></p>
@@ -52,22 +90,18 @@
             </div>
         </div>
 
-        <!-- Navigation -->
         <nav class="max-w-4xl mx-auto bg-white rounded-lg shadow p-2 flex justify-center gap-4 mb-8">
             <button data-view="dashboard-view" class="nav-item active font-semibold py-2 px-4 border-b-2 border-transparent">Dashboard</button>
             <button data-view="edit-view" class="nav-item font-semibold py-2 px-4 border-b-2 border-transparent">Edit Plan</button>
             <button data-view="calendar-view" class="nav-item font-semibold py-2 px-4 border-b-2 border-transparent">Monthly Calendar</button>
         </nav>
 
-        <!-- VIEWS -->
         <main>
-            <!-- Dashboard View (View Only) -->
             <div id="dashboard-view" class="view active">
                  <h2 class="text-2xl font-bold text-center mb-4">This Week's Plan</h2>
                  <div id="dashboard-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6"></div>
             </div>
 
-            <!-- Edit View -->
             <div id="edit-view" class="view">
                 <h2 class="text-2xl font-bold text-center mb-4">Edit This Week's Plan</h2>
                 <div class="max-w-4xl mx-auto mb-6 p-6 bg-white rounded-xl shadow-lg border border-gray-200">
@@ -76,12 +110,11 @@
                 </div>
                 <div class="flex justify-center gap-4 mb-6">
                     <button id="save-plan" class="bg-indigo-600 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-indigo-700">Save Plan</button>
-                    <button id="clear-plan" class="bg-red-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-red-600">Clear Plan</button>
+                    <button id="clear-plan" class="bg-red-500 text-white font-semibold py-2 px-6 rounded-lg shadow-md hover:bg-red-600">Clear This Week</button>
                 </div>
                 <div id="edit-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-6"></div>
             </div>
 
-            <!-- Monthly Calendar View -->
             <div id="calendar-view" class="view">
                  <div class="bg-white p-6 rounded-lg shadow">
                     <div class="flex justify-between items-center mb-4">
@@ -104,25 +137,22 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updateProfile } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, deleteDoc, getDoc, collection, addDoc, updateDoc, deleteField, query, where, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, deleteDoc, getDoc, collection, addDoc, updateDoc, deleteField, query, where, getDocs, documentId } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // IMPORTANT: Replace this with your actual Firebase config object
         const firebaseConfig = {
-        apiKey: "AIzaSyCGMQnTRIOO6MH_Xmk519YW-ZVgQc7rKrQ",
-        authDomain: "family-meal-planner-42f72.firebaseapp.com",
-        projectId: "family-meal-planner-42f72",
-        storageBucket: "family-meal-planner-42f72.firebasestorage.app",
-        messagingSenderId: "490366572565",
-        appId: "1:490366572565:web:52ddf43195b509bb47961c",
-        measurementId: "G-W88XCCD036"
-        };
+  apiKey: "AIzaSyCGMQnTRIOO6MH_Xmk519YW-ZVgQc7rKrQ",
+  authDomain: "family-meal-planner-42f72.firebaseapp.com",
+  projectId: "family-meal-planner-42f72",
+  storageBucket: "family-meal-planner-42f72.firebasestorage.app",
+  messagingSenderId: "490366572565",
+  appId: "1:490366572565:web:52ddf43195b509bb47961c",
+  measurementId: "G-W88XCCD036"
+};
         
-        // --- App Initialization ---
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         
-        // --- State Management ---
         let currentFamilyId = null;
         let familyDocRef, weeklyPlanDocRef;
         let unsubscribeFamily, unsubscribeWeeklyPlan;
@@ -130,31 +160,34 @@
         const meals = ['Breakfast', 'Lunch', 'Dinner'];
         let calendarDate = new Date();
 
-        // --- DOM Elements ---
         const mainContent = document.getElementById('main-content');
         const navItems = document.querySelectorAll('.nav-item');
         const views = document.querySelectorAll('.view');
-        // (Other DOM element selections would be here, but are omitted for brevity)
+        const loadingOverlay = document.getElementById('loading-overlay');
+        const loaderView = document.getElementById('loader-view');
+        const authModalView = document.getElementById('auth-modal-view');
+        const familyModalView = document.getElementById('family-modal-view');
 
-        // --- Auth & Family Logic ---
-        // This section remains largely the same as the previous version.
-        // It handles login, registration, creating/joining families.
-        // onAuthStateChanged is the entry point.
-        
-        // --- Date Helper Functions ---
+        const showOverlayView = (view) => {
+            loaderView.classList.add('hidden');
+            authModalView.classList.add('hidden');
+            familyModalView.classList.add('hidden');
+            if (view === 'loader') loaderView.classList.remove('hidden');
+            if (view === 'auth') authModalView.classList.remove('hidden');
+            if (view === 'family') familyModalView.classList.remove('hidden');
+        };
+
         const getWeekStartDate = (date) => {
             const d = new Date(date);
             const day = d.getDay();
-            const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust for Sunday
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
             return new Date(d.setDate(diff));
         };
-        const formatDate = (date) => date.toISOString().split('T')[0]; // YYYY-MM-DD
+        const formatDate = (date) => date.toISOString().split('T')[0];
 
-        // --- Core Application Logic ---
         const loadFamily = (familyId) => {
             currentFamilyId = familyId;
             familyDocRef = doc(db, 'families', familyId);
-            
             const currentWeekId = formatDate(getWeekStartDate(new Date()));
             weeklyPlanDocRef = doc(db, 'families', familyId, 'mealPlans', currentWeekId);
 
@@ -162,18 +195,44 @@
             listenForWeeklyPlanUpdates();
             
             mainContent.classList.remove('hidden');
-            document.getElementById('loading-overlay').classList.add('hidden');
+            loadingOverlay.classList.add('hidden');
         };
+        
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const userProfileRef = doc(db, 'users', user.uid);
+                const userProfileSnap = await getDoc(userProfileRef);
+                document.getElementById('user-display-name').textContent = user.displayName;
+
+                if (userProfileSnap.exists() && userProfileSnap.data().familyId) {
+                    loadFamily(userProfileSnap.data().familyId);
+                } else {
+                    mainContent.classList.add('hidden');
+                    loadingOverlay.classList.remove('hidden');
+                    showOverlayView('family');
+                }
+            } else {
+                if(unsubscribeFamily) unsubscribeFamily();
+                if(unsubscribeWeeklyPlan) unsubscribeWeeklyPlan();
+                currentFamilyId = null;
+                mainContent.classList.add('hidden');
+                loadingOverlay.classList.remove('hidden');
+                showOverlayView('auth');
+            }
+        });
 
         const listenForFamilyUpdates = () => {
             if (unsubscribeFamily) unsubscribeFamily();
             unsubscribeFamily = onSnapshot(familyDocRef, (docSnap) => {
                 if (docSnap.exists()) {
-                    const members = docSnap.data().members || {};
-                    document.getElementById('family-name-display').textContent = docSnap.data().name;
+                    const familyData = docSnap.data();
+                    const members = familyData.members || {};
+                    document.getElementById('family-name-display').textContent = familyData.name;
                     document.getElementById('family-id-display').textContent = currentFamilyId;
                     renderMembersList(members);
                     renderEditGrid(members);
+                    // Re-fetch weekly plan to update chef dropdowns
+                    listenForWeeklyPlanUpdates();
                 }
             });
         };
@@ -187,8 +246,6 @@
             });
         };
 
-        // --- Rendering Functions ---
-
         const renderDashboard = (planData) => {
             const grid = document.getElementById('dashboard-grid');
             grid.innerHTML = '';
@@ -198,8 +255,7 @@
                 let innerHTML = `<h3 class="text-xl font-bold mb-3 text-center text-indigo-700">${day}</h3>`;
                 meals.forEach(meal => {
                     const data = planData?.[day.toLowerCase()]?.[meal.toLowerCase()];
-                    innerHTML += `
-                        <div class="mb-3">
+                    innerHTML += `<div class="mb-3">
                             <p class="font-semibold text-gray-700">${meal}</p>
                             <p class="text-gray-600">${data?.meal || 'Not planned'}</p>
                             <p class="text-sm text-gray-500">Chef: ${data?.chef || 'N/A'}</p>
@@ -212,18 +268,51 @@
 
         const renderEditGrid = (members = {}) => {
             const grid = document.getElementById('edit-grid');
-            grid.innerHTML = ''; // Build the grid with inputs and selects, similar to previous version
-             // This code is similar to createPlannerUI from the last version
+            grid.innerHTML = '';
+            const memberNames = Object.values(members);
+            daysOfWeek.forEach(day => {
+                const dayCard = document.createElement('div');
+                dayCard.className = 'bg-white p-4 rounded-lg shadow';
+                let innerHTML = `<h3 class="text-xl font-bold mb-3 text-center">${day}</h3>`;
+                meals.forEach(meal => {
+                    const memberOptions = memberNames.map(m => `<option value="${m}">${m}</option>`).join('');
+                    innerHTML += `<div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">${meal}</label>
+                            <input type="text" id="${day}-${meal}-meal" placeholder="Meal name" class="w-full px-3 py-2 border rounded-md">
+                            <select id="${day}-${meal}-chef" class="w-full mt-2 px-3 py-2 border rounded-md">
+                                <option value="">-- Unassigned --</option>
+                                ${memberOptions}
+                            </select>
+                        </div>`;
+                });
+                dayCard.innerHTML = innerHTML;
+                grid.appendChild(dayCard);
+            });
         };
 
         const updateEditView = (planData) => {
-            // This code is similar to updateUIWithPlanData from the last version
-            // It populates the input fields in the edit view with data
+            daysOfWeek.forEach(day => {
+                meals.forEach(meal => {
+                    const mealInput = document.getElementById(`${day}-${meal}-meal`);
+                    const chefSelect = document.getElementById(`${day}-${meal}-chef`);
+                    if(mealInput && chefSelect) {
+                        const data = planData?.[day.toLowerCase()]?.[meal.toLowerCase()];
+                        mealInput.value = data?.meal || '';
+                        chefSelect.value = data?.chef || '';
+                    }
+                });
+            });
         };
 
         const renderMembersList = (members = {}) => {
             const listDiv = document.getElementById('members-list');
-            listDiv.innerHTML = ''; // Render member tags
+            listDiv.innerHTML = '';
+            Object.values(members).forEach(memberName => {
+                const memberTag = document.createElement('div');
+                memberTag.className = 'bg-gray-200 text-gray-800 text-sm font-semibold px-3 py-1 rounded-full';
+                memberTag.textContent = memberName;
+                listDiv.appendChild(memberTag);
+            });
         };
 
         const renderCalendar = async () => {
@@ -233,23 +322,21 @@
 
             const firstDayOfMonth = new Date(year, month, 1);
             const daysInMonth = new Date(year, month + 1, 0).getDate();
-            let startDayOfWeek = firstDayOfMonth.getDay() - 1; // 0=Mon, 6=Sun
+            let startDayOfWeek = firstDayOfMonth.getDay() - 1;
             if (startDayOfWeek === -1) startDayOfWeek = 6;
 
             const calendarGrid = document.getElementById('calendar-grid');
             calendarGrid.innerHTML = '';
 
-            // Fetch all meal plans for the current month
             const monthStr = String(month + 1).padStart(2, '0');
             const q = query(
                 collection(db, 'families', currentFamilyId, 'mealPlans'),
-                where(document.id(), '>=', `${year}-${monthStr}-01`),
-                where(document.id(), '<=', `${year}-${monthStr}-31`)
+                where(documentId(), '>=', `${year}-${monthStr}-01`),
+                where(documentId(), '<=', `${year}-${monthStr}-31`)
             );
             const querySnapshot = await getDocs(q);
             const monthlyPlans = {};
             querySnapshot.forEach(doc => {
-                 // The doc.id is YYYY-MM-DD of the week start
                  const weekStartDate = new Date(doc.id + 'T00:00:00');
                  const plan = doc.data();
                  for(let i=0; i<7; i++){
@@ -257,7 +344,9 @@
                     dayDate.setDate(weekStartDate.getDate() + i);
                     const dayKey = formatDate(dayDate);
                     const dayOfWeekName = daysOfWeek[i];
-                    monthlyPlans[dayKey] = plan[dayOfWeekName.toLowerCase()];
+                    if(plan[dayOfWeekName.toLowerCase()]) {
+                        monthlyPlans[dayKey] = plan[dayOfWeekName.toLowerCase()];
+                    }
                  }
             });
 
@@ -267,21 +356,18 @@
 
             for (let day = 1; day <= daysInMonth; day++) {
                 const dayDiv = document.createElement('div');
-                dayDiv.className = 'calendar-day border p-2 rounded';
+                dayDiv.className = 'calendar-day border bg-white p-2 rounded';
                 dayDiv.innerHTML = `<span class="font-bold">${day}</span>`;
-                
                 const currentDate = new Date(year, month, day);
                 const dateKey = formatDate(currentDate);
 
                 if (monthlyPlans[dateKey]) {
                     const dayPlan = monthlyPlans[dateKey];
-                    dayDiv.innerHTML += `
-                        <div class="text-xs mt-1">
+                    dayDiv.innerHTML += `<div class="text-xs mt-1">
                             <p class="truncate"><strong>B:</strong> ${dayPlan.breakfast?.meal || ''}</p>
                             <p class="truncate"><strong>L:</strong> ${dayPlan.lunch?.meal || ''}</p>
                             <p class="truncate"><strong>D:</strong> ${dayPlan.dinner?.meal || ''}</p>
-                        </div>
-                    `;
+                        </div>`;
                 }
                 calendarGrid.appendChild(dayDiv);
             }
@@ -292,14 +378,10 @@
             item.addEventListener('click', () => {
                 navItems.forEach(i => i.classList.remove('active'));
                 item.classList.add('active');
-                
                 views.forEach(v => v.classList.remove('active'));
                 const viewId = item.getAttribute('data-view');
                 document.getElementById(viewId).classList.add('active');
-
-                if (viewId === 'calendar-view') {
-                    renderCalendar();
-                }
+                if (viewId === 'calendar-view') renderCalendar();
             });
         });
         
@@ -312,8 +394,61 @@
             renderCalendar();
         });
 
-        // Add save, clear, logout, etc. event listeners here...
-        // They will now reference the `weeklyPlanDocRef` for saving/deleting.
+        document.getElementById('save-plan').addEventListener('click', async () => {
+            const planData = {};
+            daysOfWeek.forEach(day => {
+                const dayKey = day.toLowerCase();
+                planData[dayKey] = {};
+                meals.forEach(meal => {
+                    const mealKey = meal.toLowerCase();
+                    planData[dayKey][mealKey] = {
+                        meal: document.getElementById(`${day}-${meal}-meal`).value,
+                        chef: document.getElementById(`${day}-${meal}-chef`).value
+                    };
+                });
+            });
+            await setDoc(weeklyPlanDocRef, planData, { merge: true });
+            showToast('Plan saved!');
+        });
+        
+        document.getElementById('clear-plan').addEventListener('click', () => {
+            showConfirmationModal('Clear This Week?', 'This will clear the plan for the current week.', async () => {
+                await deleteDoc(weeklyPlanDocRef);
+            });
+        });
+        
+        const showToast = (message) => {
+            const toast = document.getElementById('save-toast');
+            toast.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        };
+        
+        const showConfirmationModal = (title, message, confirmAction) => {
+            const modalHost = document.getElementById('confirmation-modal');
+            modalHost.innerHTML = `<div class="modal-container bg-white w-full max-w-md p-6 rounded-lg shadow-xl text-center">
+                    <h3 class="text-xl font-bold mb-4">${title}</h3>
+                    <p class="text-gray-600 mb-6">${message}</p>
+                    <div class="flex justify-center space-x-4">
+                        <button class="modal-cancel bg-gray-300 text-gray-800 font-semibold py-2 px-6 rounded-lg hover:bg-gray-400">Cancel</button>
+                        <button class="modal-confirm bg-red-500 text-white font-semibold py-2 px-6 rounded-lg hover:bg-red-600">Confirm</button>
+                    </div>
+                </div>`;
+            modalHost.classList.remove('hidden');
+            modalHost.querySelector('.modal-confirm').onclick = () => { confirmAction(); modalHost.classList.add('hidden'); };
+            modalHost.querySelector('.modal-cancel').onclick = () => modalHost.classList.add('hidden');
+        };
+
+        // --- Auth & Family Button Logic ---
+        document.getElementById('login-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, login-email.value, login-password.value); } catch (error) { auth-error.textContent = error.message; auth-error.classList.remove('hidden'); } });
+        document.getElementById('register-form').addEventListener('submit', async (e) => { e.preventDefault(); try { const cred = await createUserWithEmailAndPassword(auth, register-email.value, register-password.value); await updateProfile(cred.user, { displayName: register-name.value }); await setDoc(doc(db, 'users', cred.user.uid), { displayName: register-name.value }); } catch (error) { auth-error.textContent = error.message; auth-error.classList.remove('hidden'); } });
+        document.getElementById('show-register').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); });
+        document.getElementById('show-login').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('register-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden'); });
+        document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+        document.getElementById('create-family-btn').addEventListener('click', async () => { const user = auth.currentUser; if (!new-family-name.value || !user) return; const newFamilyRef = await addDoc(collection(db, 'families'), { name: new-family-name.value, members: { [user.uid]: user.displayName } }); await setDoc(doc(db, 'users', user.uid), { familyId: newFamilyRef.id }, { merge: true }); });
+        document.getElementById('join-family-btn').addEventListener('click', async () => { const user = auth.currentUser; if (!join-family-id.value || !user) return; const familyRef = doc(db, 'families', join-family-id.value); const docSnap = await getDoc(familyRef); if (docSnap.exists()) { await updateDoc(familyRef, { [`members.${user.uid}`]: user.displayName }); await setDoc(doc(db, 'users', user.uid), { familyId: join-family-id.value }, { merge: true }); } else { document.getElementById('join-error').classList.remove('hidden'); } });
+        document.getElementById('switch-family-btn').addEventListener('click', async () => { const user = auth.currentUser; if (!user || !familyDocRef) return; await updateDoc(familyDocRef, { [`members.${user.uid}`]: deleteField() }); await updateDoc(doc(db, 'users', user.uid), { familyId: deleteField() }); });
+        document.getElementById('family-id-display').addEventListener('click', () => { navigator.clipboard.writeText(currentFamilyId).then(() => showToast('Family ID copied!')); });
 
     </script>
 </body>
