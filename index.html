@@ -249,10 +249,16 @@
         const renderDashboard = (planData) => {
             const grid = document.getElementById('dashboard-grid');
             grid.innerHTML = '';
-            daysOfWeek.forEach(day => {
+            const weekStart = getWeekStartDate(new Date());
+
+            daysOfWeek.forEach((day, index) => {
+                const currentDate = new Date(weekStart);
+                currentDate.setDate(weekStart.getDate() + index);
+                const formattedDate = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
                 const dayCard = document.createElement('div');
                 dayCard.className = 'bg-white p-4 rounded-lg shadow';
-                let innerHTML = `<h3 class="text-xl font-bold mb-3 text-center text-indigo-700">${day}</h3>`;
+                let innerHTML = `<h3 class="text-xl font-bold mb-1 text-center text-indigo-700">${day}</h3><p class="text-sm text-center text-gray-500 mb-3">${formattedDate}</p>`;
                 meals.forEach(meal => {
                     const data = planData?.[day.toLowerCase()]?.[meal.toLowerCase()];
                     innerHTML += `<div class="mb-3">
@@ -270,10 +276,16 @@
             const grid = document.getElementById('edit-grid');
             grid.innerHTML = '';
             const memberNames = Object.values(members);
-            daysOfWeek.forEach(day => {
+            const weekStart = getWeekStartDate(new Date());
+
+            daysOfWeek.forEach((day, index) => {
+                const currentDate = new Date(weekStart);
+                currentDate.setDate(weekStart.getDate() + index);
+                const formattedDate = currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
                 const dayCard = document.createElement('div');
                 dayCard.className = 'bg-white p-4 rounded-lg shadow';
-                let innerHTML = `<h3 class="text-xl font-bold mb-3 text-center">${day}</h3>`;
+                let innerHTML = `<h3 class="text-xl font-bold mb-1 text-center">${day}</h3><p class="text-sm text-center text-gray-500 mb-3">${formattedDate}</p>`;
                 meals.forEach(meal => {
                     const memberOptions = memberNames.map(m => `<option value="${m}">${m}</option>`).join('');
                     innerHTML += `<div class="mb-4">
