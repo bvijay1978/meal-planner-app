@@ -140,14 +140,14 @@
         import { getFirestore, doc, setDoc, onSnapshot, deleteDoc, getDoc, collection, addDoc, updateDoc, deleteField, query, where, getDocs, documentId } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         const firebaseConfig = {
-  apiKey: "AIzaSyCGMQnTRIOO6MH_Xmk519YW-ZVgQc7rKrQ",
-  authDomain: "family-meal-planner-42f72.firebaseapp.com",
-  projectId: "family-meal-planner-42f72",
-  storageBucket: "family-meal-planner-42f72.firebasestorage.app",
-  messagingSenderId: "490366572565",
-  appId: "1:490366572565:web:52ddf43195b509bb47961c",
-  measurementId: "G-W88XCCD036"
-};
+        apiKey: "AIzaSyCGMQnTRIOO6MH_Xmk519YW-ZVgQc7rKrQ",
+        authDomain: "family-meal-planner-42f72.firebaseapp.com",
+        projectId: "family-meal-planner-42f72",
+        storageBucket: "family-meal-planner-42f72.firebasestorage.app",
+        messagingSenderId: "490366572565",
+        appId: "1:490366572565:web:52ddf43195b509bb47961c",
+        measurementId: "G-W88XCCD036"
+        };
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -440,13 +440,13 @@
         };
 
         // --- Auth & Family Button Logic ---
-        document.getElementById('login-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, login-email.value, login-password.value); } catch (error) { auth-error.textContent = error.message; auth-error.classList.remove('hidden'); } });
-        document.getElementById('register-form').addEventListener('submit', async (e) => { e.preventDefault(); try { const cred = await createUserWithEmailAndPassword(auth, register-email.value, register-password.value); await updateProfile(cred.user, { displayName: register-name.value }); await setDoc(doc(db, 'users', cred.user.uid), { displayName: register-name.value }); } catch (error) { auth-error.textContent = error.message; auth-error.classList.remove('hidden'); } });
+        document.getElementById('login-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value); } catch (error) { document.getElementById('auth-error').textContent = error.message; document.getElementById('auth-error').classList.remove('hidden'); } });
+        document.getElementById('register-form').addEventListener('submit', async (e) => { e.preventDefault(); try { const cred = await createUserWithEmailAndPassword(auth, document.getElementById('register-email').value, document.getElementById('register-password').value); await updateProfile(cred.user, { displayName: document.getElementById('register-name').value }); await setDoc(doc(db, 'users', cred.user.uid), { displayName: document.getElementById('register-name').value }); } catch (error) { document.getElementById('auth-error').textContent = error.message; document.getElementById('auth-error').classList.remove('hidden'); } });
         document.getElementById('show-register').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); });
         document.getElementById('show-login').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('register-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden'); });
         document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
-        document.getElementById('create-family-btn').addEventListener('click', async () => { const user = auth.currentUser; if (!new-family-name.value || !user) return; const newFamilyRef = await addDoc(collection(db, 'families'), { name: new-family-name.value, members: { [user.uid]: user.displayName } }); await setDoc(doc(db, 'users', user.uid), { familyId: newFamilyRef.id }, { merge: true }); });
-        document.getElementById('join-family-btn').addEventListener('click', async () => { const user = auth.currentUser; if (!join-family-id.value || !user) return; const familyRef = doc(db, 'families', join-family-id.value); const docSnap = await getDoc(familyRef); if (docSnap.exists()) { await updateDoc(familyRef, { [`members.${user.uid}`]: user.displayName }); await setDoc(doc(db, 'users', user.uid), { familyId: join-family-id.value }, { merge: true }); } else { document.getElementById('join-error').classList.remove('hidden'); } });
+        document.getElementById('create-family-btn').addEventListener('click', async () => { const user = auth.currentUser; const newFamilyName = document.getElementById('new-family-name').value; if (!newFamilyName || !user) return; const newFamilyRef = await addDoc(collection(db, 'families'), { name: newFamilyName, members: { [user.uid]: user.displayName } }); await setDoc(doc(db, 'users', user.uid), { familyId: newFamilyRef.id }, { merge: true }); });
+        document.getElementById('join-family-btn').addEventListener('click', async () => { const user = auth.currentUser; const familyId = document.getElementById('join-family-id').value; if (!familyId || !user) return; const familyRef = doc(db, 'families', familyId); const docSnap = await getDoc(familyRef); if (docSnap.exists()) { await updateDoc(familyRef, { [`members.${user.uid}`]: user.displayName }); await setDoc(doc(db, 'users', user.uid), { familyId: familyId }, { merge: true }); } else { document.getElementById('join-error').classList.remove('hidden'); } });
         document.getElementById('switch-family-btn').addEventListener('click', async () => { const user = auth.currentUser; if (!user || !familyDocRef) return; await updateDoc(familyDocRef, { [`members.${user.uid}`]: deleteField() }); await updateDoc(doc(db, 'users', user.uid), { familyId: deleteField() }); });
         document.getElementById('family-id-display').addEventListener('click', () => { navigator.clipboard.writeText(currentFamilyId).then(() => showToast('Family ID copied!')); });
 
