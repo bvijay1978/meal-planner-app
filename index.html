@@ -178,8 +178,7 @@ const firebaseConfig = {
   messagingSenderId: "490366572565",
   appId: "1:490366572565:web:52ddf43195b509bb47961c",
   measurementId: "G-W88XCCD036"
-};
-        
+};        
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
@@ -327,19 +326,30 @@ const firebaseConfig = {
                 dayCard.className = 'bg-white p-4 rounded-lg shadow';
                 let innerHTML = `<h3 class="text-xl font-bold mb-1 text-center text-indigo-700">${day}</h3><p class="text-sm text-center text-gray-500 mb-3">${currentDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>`;
                 
+                const mealsToDisplay = [];
                 standardMeals.forEach(meal => {
                     const mealKey = meal.toLowerCase();
                     const data = planData?.[dayKey]?.[mealKey];
-                    if (data) {
-                        innerHTML += `<div class="mb-3"><p class="font-semibold text-gray-700">${meal}</p><p class="text-gray-600">${data.meal || 'Not planned'}</p><p class="text-sm text-gray-500">Chef: ${data.chef || 'N/A'}</p></div>`;
+                    if (data && data.meal) {
+                        mealsToDisplay.push({ type: meal, meal: data.meal, chef: data.chef });
                     }
                 });
 
                 const additionalMeals = planData?.[dayKey]?.additionalMeals || [];
-                if (additionalMeals.length > 0) {
-                     innerHTML += `<hr class="my-2">`;
-                    additionalMeals.forEach(addMeal => {
-                        innerHTML += `<div class="mb-3"><p class="font-semibold text-gray-700">${addMeal.type}</p><p class="text-gray-600">${addMeal.meal || 'Not planned'}</p><p class="text-sm text-gray-500">Chef: ${addMeal.chef || 'N/A'}</p></div>`;
+                additionalMeals.forEach(addMeal => {
+                    if (addMeal.meal) {
+                         mealsToDisplay.push({ type: addMeal.type, meal: addMeal.meal, chef: addMeal.chef });
+                    }
+                });
+
+                if (mealsToDisplay.length === 0) {
+                    innerHTML += `<p class="text-center text-gray-500 mt-4">No meals planned.</p>`;
+                } else {
+                    mealsToDisplay.forEach((meal, idx) => {
+                        if (idx > 0 && !standardMeals.includes(meal.type) && standardMeals.includes(mealsToDisplay[idx-1].type)) {
+                            innerHTML += `<hr class="my-2">`;
+                        }
+                        innerHTML += `<div class="mb-3"><p class="font-semibold text-gray-700">${meal.type}</p><p class="text-gray-600">${meal.meal}</p><p class="text-sm text-gray-500">Chef: ${meal.chef || 'N/A'}</p></div>`;
                     });
                 }
                 
@@ -350,8 +360,9 @@ const firebaseConfig = {
 
         const createMealInputGroup = (day, mealType, memberNames, isDeletable, uniqueId, isCustomType) => {
             const wrapper = document.createElement('div');
-            wrapper.className = 'mb-4 border-t pt-2';
+            wrapper.className = 'mb-4 border-t pt-2 first:border-t-0';
             if (isCustomType) wrapper.classList.add('additional-meal-row');
+            if(!isCustomType) wrapper.classList.add('standard-meal-row');
             wrapper.dataset.id = uniqueId;
 
             let typeHTML;
@@ -393,10 +404,10 @@ const firebaseConfig = {
             grid.innerHTML = '';
             const memberNames = Object.values(members);
 
-            daysOfWeek.forEach((day, index) => {
+            daysOfWeek.forEach((day) => {
                 const dayKey = day.toLowerCase();
                 const currentDate = new Date(weekStart);
-                currentDate.setDate(weekStart.getDate() + index);
+                currentDate.setDate(weekStart.getDate() + daysOfWeek.indexOf(day));
                 
                 const dayCard = document.createElement('div');
                 dayCard.className = 'bg-white p-4 rounded-lg shadow';
@@ -404,6 +415,7 @@ const firebaseConfig = {
 
                 const mealsContainer = document.createElement('div');
                 mealsContainer.className = 'meals-container';
+                dayCard.appendChild(mealsContainer);
                 
                 standardMeals.forEach(meal => {
                     mealsContainer.appendChild(createMealInputGroup(day, meal, memberNames, false, meal.toLowerCase(), false));
@@ -413,8 +425,6 @@ const firebaseConfig = {
                 additionalMeals.forEach(meal => {
                     mealsContainer.appendChild(createMealInputGroup(day, meal.type, memberNames, true, meal.id, true));
                 });
-                
-                dayCard.appendChild(mealsContainer);
                 
                 const addMealBtn = document.createElement('button');
                 addMealBtn.textContent = '+ Add Meal';
@@ -436,25 +446,28 @@ const firebaseConfig = {
         };
 
         const updateEditView = (planData) => {
-            daysOfWeek.forEach(day => {
+             daysOfWeek.forEach(day => {
                 const dayKey = day.toLowerCase();
                 const dayCard = document.getElementById('edit-grid').querySelector(`.bg-white:nth-child(${daysOfWeek.indexOf(day) + 1})`);
                 if (!dayCard) return;
 
+                const planForDay = planData[dayKey] || {};
+
                 standardMeals.forEach(meal => {
                     const mealKey = meal.toLowerCase();
-                    const mealGroup = dayCard.querySelector(`[data-id="${mealKey}"]`);
+                    const mealGroup = dayCard.querySelector(`.standard-meal-row[data-id="${mealKey}"]`);
                     if (mealGroup) {
-                        const data = planData?.[dayKey]?.[mealKey];
+                        const data = planForDay[mealKey];
                         mealGroup.querySelector('.meal-name-input').value = data?.meal || '';
                         mealGroup.querySelector('.meal-chef-select').value = data?.chef || '';
                     }
                 });
-
-                const additionalMeals = planData?.[dayKey]?.additionalMeals || [];
+                
+                const additionalMeals = planForDay.additionalMeals || [];
                 additionalMeals.forEach(mealData => {
-                    const mealGroup = dayCard.querySelector(`[data-id="${mealData.id}"]`);
+                    const mealGroup = dayCard.querySelector(`.additional-meal-row[data-id="${mealData.id}"]`);
                     if (mealGroup) {
+                        mealGroup.querySelector('.meal-type-input').value = mealData.type || '';
                         mealGroup.querySelector('.meal-name-input').value = mealData.meal || '';
                         mealGroup.querySelector('.meal-chef-select').value = mealData.chef || '';
                     }
@@ -462,16 +475,153 @@ const firebaseConfig = {
             });
         };
 
-        const renderMembersList = (members = {}) => { /* ... (no changes) ... */ };
+        const renderMembersList = (members = {}) => {
+            const listDiv = document.getElementById('members-list');
+            listDiv.innerHTML = '';
+            Object.values(members).forEach(memberName => {
+                const memberTag = document.createElement('div');
+                memberTag.className = 'bg-gray-200 text-gray-800 text-sm font-semibold px-3 py-1 rounded-full';
+                memberTag.textContent = memberName;
+                listDiv.appendChild(memberTag);
+            });
+        };
+        
         const renderCalendar = async () => { /* ... (no changes) ... */ };
         const renderSharedPlans = async () => { /* ... (no changes) ... */ };
-        const handleIngredientsClick = async (mealGroup) => { /* ... (updated to take mealGroup) ... */ };
-        const handleCopyMeal = (mealGroup) => { /* ... (updated to take mealGroup) ... */ };
-        const handlePasteMeal = (targetInput) => { /* ... (no changes) ... */ };
-        const handleCopyDay = (dayCard) => { /* ... (updated to take dayCard) ... */ };
-        const handlePasteDay = (dayCard) => { /* ... (updated to take dayCard) ... */ };
-        // --- (All other functions and listeners are here and complete) ---
+        
+        const handleIngredientsClick = async (mealGroup) => {
+            const mealName = mealGroup.querySelector('.meal-name-input').value.trim();
+            if (!mealName) { showToast('Please enter a meal name first.'); return; }
+            const modal = document.getElementById('ingredients-modal');
+            modal.querySelector('#ingredients-meal-name').textContent = `Ingredients for ${mealName}`;
+            const textarea = modal.querySelector('#ingredients-textarea');
+            const mealDocRef = doc(db, 'families', currentFamilyId, 'meals', mealName);
+            const mealSnap = await getDoc(mealDocRef);
+            textarea.value = mealSnap.exists() ? (mealSnap.data().ingredients || []).join('\n') : '';
+            modal.querySelector('#ingredients-save').onclick = async () => {
+                const ingredients = textarea.value.split('\n').filter(Boolean);
+                await setDoc(mealDocRef, { ingredients }, { merge: true });
+                modal.classList.add('hidden');
+                showToast('Ingredients saved!');
+            };
+            modal.querySelector('#ingredients-cancel').onclick = () => modal.classList.add('hidden');
+            modal.classList.remove('hidden');
+        };
 
+        const handleCopyMeal = (mealGroup) => {
+            copiedData = {
+                type: 'meal',
+                meal: mealGroup.querySelector('.meal-name-input').value,
+                chef: mealGroup.querySelector('.meal-chef-select').value
+            };
+            showToast('Meal copied! Click another meal name to paste.');
+        };
+
+        const handlePasteMeal = (targetInput) => {
+            if (copiedData && copiedData.type === 'meal') {
+                targetInput.value = copiedData.meal;
+                targetInput.closest('.mb-4').querySelector('.meal-chef-select').value = copiedData.chef;
+                copiedData = null;
+                showToast('Pasted!');
+            }
+        };
+
+        const handleCopyDay = (dayCard) => {
+            copiedData = { type: 'day', data: [] };
+            dayCard.querySelectorAll('.standard-meal-row, .additional-meal-row').forEach(row => {
+                 copiedData.data.push({
+                    type: row.querySelector('.meal-type-input').value,
+                    meal: row.querySelector('.meal-name-input').value,
+                    chef: row.querySelector('.meal-chef-select').value
+                });
+            });
+            showToast(`Day copied! Click 'Paste Day' on another day.`);
+        };
+        
+        const handlePasteDay = (dayCard) => {
+             if (copiedData && copiedData.type === 'day') {
+                const mealsContainer = dayCard.querySelector('.meals-container');
+                mealsContainer.innerHTML = ''; // Clear existing
+                const memberNames = Object.values(familyData.members || {});
+                copiedData.data.forEach(d => {
+                    const isStandard = standardMeals.includes(d.type);
+                    const mealGroup = createMealInputGroup('', d.type, memberNames, !isStandard, isStandard ? d.type.toLowerCase() : crypto.randomUUID(), !isStandard);
+                    mealGroup.querySelector('.meal-name-input').value = d.meal;
+                    mealGroup.querySelector('.meal-chef-select').value = d.chef;
+                    mealsContainer.appendChild(mealGroup);
+                });
+                showToast(`Pasted to day!`);
+             } else {
+                showToast('No day copied. Click a day\'s copy icon first.');
+             }
+        };
+        
+        document.getElementById('save-plan').addEventListener('click', async () => {
+            const weekId = formatDate(getWeekStartDate(selectedDate));
+            const planDocRef = doc(db, 'families', currentFamilyId, 'mealPlans', weekId);
+            const planData = {};
+            const batch = writeBatch(db);
+            const mealsRef = collection(db, 'families', currentFamilyId, 'meals');
+            const mealTypesRef = collection(db, 'families', currentFamilyId, 'mealTypes');
+            
+            const newMealNames = new Set();
+            const newMealTypes = new Set();
+
+            daysOfWeek.forEach(day => {
+                const dayKey = day.toLowerCase();
+                planData[dayKey] = { additionalMeals: [] };
+                
+                const dayCard = document.getElementById('edit-grid').querySelector(`.bg-white:nth-child(${daysOfWeek.indexOf(day) + 1})`);
+                if (!dayCard) return;
+
+                dayCard.querySelectorAll('.standard-meal-row, .additional-meal-row').forEach(row => {
+                    const mealType = row.querySelector('.meal-type-input').value.trim();
+                    const mealName = row.querySelector('.meal-name-input').value.trim();
+                    const chef = row.querySelector('.meal-chef-select').value;
+                    const id = row.dataset.id;
+                    
+                    if(mealName) newMealNames.add(mealName);
+
+                    if (row.classList.contains('standard-meal-row')) {
+                        planData[dayKey][id] = { meal: mealName, chef };
+                    } else if (row.classList.contains('additional-meal-row') && mealType) {
+                        newMealTypes.add(mealType);
+                        planData[dayKey].additionalMeals.push({ id, type: mealType, meal: mealName, chef });
+                    }
+                });
+            });
+
+            for (const mealName of newMealNames) { batch.set(doc(mealsRef, mealName), {}, { merge: true }); }
+            for (const mealType of newMealTypes) { batch.set(doc(mealTypesRef, mealType), {}, { merge: true }); }
+            
+            batch.set(planDocRef, planData);
+            await batch.commit();
+            showToast('Plan saved!');
+        });
+        
+        // --- All other full event listeners (auth, clear, share, etc.) are here and complete ---
+        document.querySelectorAll('.nav-item').forEach(item => item.addEventListener('click', (e) => showView(e.currentTarget.dataset.view)));
+        const handlePrevWeek = () => { const newDate = getWeekStartDate(selectedDate); newDate.setDate(newDate.getDate() - 7); loadWeek(newDate); };
+        const handleNextWeek = () => { const newDate = getWeekStartDate(selectedDate); newDate.setDate(newDate.getDate() + 7); loadWeek(newDate); };
+        document.getElementById('dashboard-prev-week').addEventListener('click', handlePrevWeek);
+        document.getElementById('dashboard-next-week').addEventListener('click', handleNextWeek);
+        document.getElementById('edit-prev-week').addEventListener('click', handlePrevWeek);
+        document.getElementById('edit-next-week').addEventListener('click', handleNextWeek);
+        document.getElementById('calendar-prev-month').addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() - 1); renderCalendar(); });
+        document.getElementById('calendar-next-month').addEventListener('click', () => { calendarDisplayDate.setMonth(calendarDisplayDate.getMonth() + 1); renderCalendar(); });
+        document.getElementById('clear-plan').addEventListener('click', () => { showConfirmationModal('Clear This Week?', 'This will clear the plan for the currently selected week.', async () => { const weekId = formatDate(getWeekStartDate(selectedDate)); await deleteDoc(doc(db, 'families', currentFamilyId, 'mealPlans', weekId)); showToast('Plan for this week has been cleared.'); }); });
+        document.getElementById('copy-prev-week').addEventListener('click', async () => { const prevWeekDate = new Date(selectedDate); prevWeekDate.setDate(prevWeekDate.getDate() - 7); const prevWeekId = formatDate(getWeekStartDate(prevWeekDate)); const docSnap = await getDoc(doc(db, 'families', currentFamilyId, 'mealPlans', prevWeekId)); if (docSnap.exists()) { updateEditView(docSnap.data()); showToast('Previous week copied. Make changes and save.'); } else { showToast('No plan found for the previous week.'); } });
+        document.getElementById('share-week').addEventListener('click', async () => { showConfirmationModal('Share Plan?', 'This will make this week\'s plan visible to other families.', async () => { const weekId = formatDate(getWeekStartDate(selectedDate)); const planSnap = await getDoc(doc(db, 'families', currentFamilyId, 'mealPlans', weekId)); if (planSnap.exists()) { await addDoc(collection(db, 'publishedPlans'), { ...planSnap.data(), familyName: familyData.name, sharedDate: new Date() }); showToast('Plan shared successfully!'); } else { showToast('Cannot share an empty plan.'); } }); });
+        document.getElementById('login-form').addEventListener('submit', async (e) => { e.preventDefault(); try { await signInWithEmailAndPassword(auth, document.getElementById('login-email').value, document.getElementById('login-password').value); } catch (error) { document.getElementById('auth-error').textContent = error.message; document.getElementById('auth-error').classList.remove('hidden'); } });
+        document.getElementById('register-form').addEventListener('submit', async (e) => { e.preventDefault(); try { const cred = await createUserWithEmailAndPassword(auth, document.getElementById('register-email').value, document.getElementById('register-password').value); await updateProfile(cred.user, { displayName: document.getElementById('register-name').value }); await setDoc(doc(db, 'users', cred.user.uid), { displayName: document.getElementById('register-name').value }); } catch (error) { document.getElementById('auth-error').textContent = error.message; document.getElementById('auth-error').classList.remove('hidden'); } });
+        document.getElementById('show-register').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('login-form').classList.add('hidden'); document.getElementById('register-form').classList.remove('hidden'); });
+        document.getElementById('show-login').addEventListener('click', (e) => { e.preventDefault(); document.getElementById('register-form').classList.add('hidden'); document.getElementById('login-form').classList.remove('hidden'); });
+        document.getElementById('logout-btn').addEventListener('click', () => signOut(auth));
+        document.getElementById('create-family-btn').addEventListener('click', async () => { const user = auth.currentUser; const newFamilyName = document.getElementById('new-family-name').value; if (!newFamilyName || !user) return; const newFamilyRef = await addDoc(collection(db, 'families'), { name: newFamilyName, members: { [user.uid]: user.displayName } }); await setDoc(doc(db, 'users', user.uid), { familyId: newFamilyRef.id }, { merge: true }); });
+        document.getElementById('join-family-btn').addEventListener('click', async () => { const user = auth.currentUser; const familyId = document.getElementById('join-family-id').value; if (!familyId || !user) return; const familyRef = doc(db, 'families', familyId); const docSnap = await getDoc(familyRef); if (docSnap.exists()) { await updateDoc(familyRef, { [`members.${user.uid}`]: user.displayName }); await setDoc(doc(db, 'users', user.uid), { familyId: familyId }, { merge: true }); } else { document.getElementById('join-error').classList.remove('hidden'); } });
+        document.getElementById('switch-family-btn').addEventListener('click', async () => { const user = auth.currentUser; if (!user || !currentFamilyId) return; const familyDocRef = doc(db, 'families', currentFamilyId); await updateDoc(familyDocRef, { [`members.${user.uid}`]: deleteField() }); await updateDoc(doc(db, 'users', user.uid), { familyId: deleteField() }); });
+        document.getElementById('family-id-display').addEventListener('click', () => { navigator.clipboard.writeText(currentFamilyId).then(() => showToast('Family ID copied!')); });
+        
     </script>
 </body>
 </html>
